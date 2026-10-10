@@ -84,6 +84,15 @@ final class SimCard {
     }
 
     /**
+     * The mask {@link #transmit(byte[])} answers through right now: the real
+     * version after {@link #reset()}, or the one the last fixture naming
+     * {@code appletVersion} set. What a fixture without a version keeps.
+     */
+    VersionMask mask() {
+        return mask;
+    }
+
+    /**
      * Send raw command bytes through the active version mask and return
      * data‖SW. Nothing here retries: a replayed LOAD_PROOF burns a slot and a
      * replayed SPEND_PROOF answers 6985.
@@ -126,9 +135,12 @@ final class SimCard {
      * until the next fixture or reset.
      *
      * <p>LOAD_PROOF and SPEND_PROOF are PIN-gated (CashuApplet.requirePinIfSet),
-     * so {@code proofs} and {@code spentSlots} are accepted only while the card
-     * has no PIN: after a fixture that set one, a fixture carrying proofs is
-     * refused at LOAD_PROOF with 6982. Reset first.
+     * and so is SET_PUK once a PIN exists (CashuApplet.processSetPuk:
+     * {@code if (pinState[0] != 0) requirePinVerified()}), so {@code proofs},
+     * {@code spentSlots} and {@code puk} are accepted only while the card has
+     * no PIN: after a fixture that set one, a fixture carrying proofs is
+     * refused at LOAD_PROOF with 6982 and one carrying a PUK at SET_PUK with
+     * 6982. Reset first.
      */
     void applyFixture(Fixture f) throws FixtureException {
         generation++;

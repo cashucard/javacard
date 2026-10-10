@@ -21,7 +21,7 @@ import java.util.Set;
  * <pre>
  * {
  *   "pin":           "1234",            // optional, 4–8 bytes
- *   "puk":           "12345678",        // optional, 8–12 bytes; needs a PUK-capable appletVersion
+ *   "puk":           "12345678",        // optional, 8–12 bytes; needs a PUK-capable effective mask
  *   "proofs":        [{ "keysetId", "amount", "nonce", "C" }, ...],   // optional, at most 32
  *   "spentSlots":    [1],               // optional, indexes into "proofs"
  *   "blockedPin":    true,              // optional, needs "pin"
@@ -100,10 +100,16 @@ final class Fixture {
 
     /**
      * Parse and validate. {@code real} is the applet's own mask, so that
-     * {@code appletVersion} can be refused when it is newer than the applet
-     * and {@code puk} when the emulated build has no SET_PUK.
+     * {@code appletVersion} can be refused when it is newer than the applet.
+     * {@code current} is the mask the card answers through right now
+     * ({@link SimCard#mask()}); a fixture without {@code appletVersion} keeps
+     * it, so {@code puk} is checked against whichever of the two is in
+     * effect for this fixture, and a {@code puk} under a mask with no SET_PUK
+     * is refused whether the version came in this body or an earlier one.
+     * The other order — a PUK set first, the mask lowered afterwards — is
+     * legal on purpose; see the "Version masks" section of CardSim.java.
      */
-    static Fixture parse(String json, VersionMask real) {
+    static Fixture parse(String json, VersionMask real, VersionMask current) {
         JsonElement root;
         try {
             root = JsonParser.parseString(json == null ? "" : json);
@@ -127,9 +133,10 @@ final class Fixture {
             if (!isString(v)) throw new IllegalArgumentException("appletVersion must be a string");
             mask = VersionMask.forVersion(v.getAsString(), real);
         }
-        if (puk != null && mask != null && !mask.hasPuk()) {
-            throw new IllegalArgumentException("puk needs a PUK-capable applet; " + mask.version()
-                + " has no SET_PUK (appletVersion must be absent or 0.6 or later)");
+        VersionMask effective = mask != null ? mask : current;
+        if (puk != null && !effective.hasPuk()) {
+            throw new IllegalArgumentException("puk needs a PUK-capable applet; the card is masked to "
+                + effective.version() + ", which has no SET_PUK");
         }
 
         List<Proof> proofs = new ArrayList<>();

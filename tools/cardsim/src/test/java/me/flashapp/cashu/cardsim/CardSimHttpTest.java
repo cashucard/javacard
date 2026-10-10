@@ -144,6 +144,18 @@ class CardSimHttpTest {
     }
 
     @Test
+    @DisplayName("puk under a mask kept from an earlier fixture answers 400, not a PUK on a 0.4 card")
+    void pukUnderKeptMaskIs400() throws Exception {
+        assertEquals(200, post("/fixture", "{\"appletVersion\":\"0.4\"}").statusCode());
+        HttpResponse<String> refused = post("/fixture", "{\"puk\":\"12345678\"}");
+        assertEquals(400, refused.statusCode());
+        assertTrue(json(refused).get("error").getAsString().contains("masked to 0.4"));
+        JsonObject s = json(get("/state"));
+        assertEquals("0.4", s.get("appletVersion").getAsString());
+        assertEquals(0, s.get("pukState").getAsInt());
+    }
+
+    @Test
     @DisplayName("a version-masked fixture changes what /apdu answers")
     void maskedFixture() throws Exception {
         assertEquals(200, post("/fixture", "{\"appletVersion\":\"0.4\"}").statusCode());

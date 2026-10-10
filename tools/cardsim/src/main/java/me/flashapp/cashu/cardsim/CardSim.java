@@ -64,13 +64,16 @@ import java.util.function.Supplier;
  *       reset. On success, answers {@code /state}. Ends with a SELECT, so the
  *       app's first command finds an unverified session. {@code spentSlots}
  *       are spent on the <i>card</i> only (SPEND_PROOF over 32 zero bytes);
- *       the mint still holds those proofs live. {@code proofs} and
- *       {@code spentSlots} are accepted only while the card has no PIN;
- *       after a PIN fixture, {@code /reset} first (LOAD_PROOF is PIN-gated
- *       and answers 409 {@code 6982}). A fixture without
- *       {@code appletVersion} keeps the mask the previous fixture set; only
- *       {@code /reset} restores the real version. See Fixture.java for the
- *       schema and SimCard.applyFixture for the order.</dd>
+ *       the mint still holds those proofs live. {@code proofs},
+ *       {@code spentSlots} and {@code puk} are accepted only while the card
+ *       has no PIN; after a PIN fixture, {@code /reset} first (LOAD_PROOF,
+ *       SPEND_PROOF and SET_PUK are PIN-gated and answer 409 {@code 6982}).
+ *       A fixture without {@code appletVersion} keeps the mask the previous
+ *       fixture set; only {@code /reset} restores the real version, and
+ *       {@code puk} is checked against that effective mask (400 while the
+ *       card is masked to a build with no SET_PUK, whether the version came
+ *       in this body or an earlier one). See Fixture.java for the schema and
+ *       SimCard.applyFixture for the order.</dd>
  *
  *   <dt>{@code GET /state}</dt>
  *   <dd>{@code {generation, appletVersion, realVersion, deterministicKey:
@@ -99,6 +102,13 @@ import java.util.function.Supplier;
  * {@code appletVersion} of 0.4 or 0.5 makes the card answer SELECT and
  * GET_INFO as that build would and refuse the instructions it lacked with
  * 6D00; everything else reaches the real applet. See VersionMask.java.
+ * The mask gates {@code /apdu} only: a fixture's steps go straight to the
+ * applet, which is why {@code puk} is refused up front under a mask without
+ * SET_PUK rather than answered 6D00. The other order is deliberately legal:
+ * a card that already holds a PUK can be masked to 0.4 or 0.5 afterwards
+ * (VersionMaskTest.stateIsUnmasked relies on it to show {@code /state}
+ * reads the real GET_INFO under a mask). That card holds what no 0.4 build
+ * could; a loader that wants a faithful old card resets before masking.
  *
  * <h2>Threads</h2>
  *
@@ -225,7 +235,7 @@ public final class CardSim {
 
     private void handleFixture(HttpExchange ex) throws IOException {
         SimCard c = card();
-        Fixture f = Fixture.parse(body(ex), c.real());
+        Fixture f = Fixture.parse(body(ex), c.real(), c.mask());
         try {
             c.applyFixture(f);
         } catch (FixtureException e) {

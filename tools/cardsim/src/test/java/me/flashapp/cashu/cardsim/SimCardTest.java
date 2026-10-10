@@ -50,7 +50,7 @@ class SimCardTest {
     }
 
     Fixture fixture(String json) {
-        return Fixture.parse(json, card.real());
+        return Fixture.parse(json, card.real(), card.mask());
     }
 
     void apply(String json) throws FixtureException {
@@ -171,7 +171,7 @@ class SimCardTest {
         byte[] status = data(card.transmit(GET_SLOT_STATUS));
         for (int i = 0; i < 32; i++) assertEquals(1, status[i], "slot " + i + " unspent");
 
-        byte[] extra = Fixture.parse("{\"proofs\":[" + proof("ff".repeat(32), C_A, 2) + "]}", card.real())
+        byte[] extra = fixture("{\"proofs\":[" + proof("ff".repeat(32), C_A, 2) + "]}")
             .proofs.get(0).payload();
         assertEquals(0x6A84, SimCard.sw(card.transmit(SimCard.apdu(0x30, 0, 0, extra, 0x01))));
     }
@@ -251,6 +251,41 @@ class SimCardTest {
 
         card.reset();
         assertFalse(card.state().has("fixtureError"), "reset clears the error");
+    }
+
+    @Test
+    @DisplayName("puk after a PIN fixture is refused at SET_PUK with 6982: SET_PUK is PIN-gated once a PIN exists")
+    void pukAfterPinRefused() throws FixtureException {
+        // flash-mobile's `loaded` fixture is PIN + PUK (ENG-634-flash-mobile.md:58);
+        // split across two bodies it hits CashuApplet.processSetPuk's
+        // requirePinVerified, which the header documents alongside LOAD_PROOF.
+        apply("{\"pin\":\"1234\"}");
+        FixtureException e = assertThrows(FixtureException.class, () -> apply("{\"puk\":\"12345678\"}"));
+        assertEquals("SET_PUK", e.step);
+        assertEquals(0x6982, e.sw);
+        assertEquals(0, card.state().get("pukState").getAsInt(), "no PUK reached the card");
+
+        card.reset();
+        apply("{\"pin\":\"1234\",\"puk\":\"12345678\"}");
+        assertEquals(1, card.state().get("pukState").getAsInt(), "one body sets both: SET_PUK runs before SET_PIN");
+    }
+
+    @Test
+    @DisplayName("puk is checked against the effective mask: {appletVersion:0.4} then {puk} is refused before any APDU")
+    void pukUnderAKeptMaskRefused() throws FixtureException {
+        apply("{\"appletVersion\":\"0.4\"}");
+        String before = card.state().toString();
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> fixture("{\"puk\":\"12345678\"}"));
+        assertTrue(e.getMessage().contains("masked to 0.4"), e.getMessage());
+        assertEquals(before, card.state().toString(), "nothing reached the card");
+
+        apply("{\"appletVersion\":\"0.5\"}");
+        assertThrows(IllegalArgumentException.class, () -> fixture("{\"puk\":\"12345678\"}"), "0.5 has no SET_PUK either");
+
+        // A body that names a PUK-capable version is checked against that
+        // version, not the kept one.
+        apply("{\"puk\":\"12345678\",\"appletVersion\":\"0.6\"}");
+        assertEquals(1, card.state().get("pukState").getAsInt());
     }
 
     @Test

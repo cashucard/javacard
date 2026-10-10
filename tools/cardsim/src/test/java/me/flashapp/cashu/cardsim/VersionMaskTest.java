@@ -26,7 +26,7 @@ class VersionMaskTest {
     }
 
     void mask(String version) throws FixtureException {
-        card.applyFixture(Fixture.parse("{\"appletVersion\":\"" + version + "\"}", card.real()));
+        card.applyFixture(Fixture.parse("{\"appletVersion\":\"" + version + "\"}", card.real(), card.mask()));
     }
 
     byte[] data(byte[] resp) {
@@ -80,7 +80,9 @@ class VersionMaskTest {
     @Test
     @DisplayName("the mask is read unmasked by state: a 0.4 card still reports its PUK state to the bridge")
     void stateIsUnmasked() throws FixtureException {
-        card.applyFixture(Fixture.parse("{\"puk\":\"12345678\"}", card.real()));
+        // PUK first, mask second: legal on purpose (CardSim.java, "Version
+        // masks"); the reverse order is refused by Fixture.parse.
+        card.applyFixture(Fixture.parse("{\"puk\":\"12345678\"}", card.real(), card.mask()));
         mask("0.4");
         assertEquals(1, card.state().get("pukState").getAsInt(), "state reads the real 9-byte GET_INFO");
         assertEquals(8, data(card.transmit(GET_INFO)).length, "the app sees 8");
