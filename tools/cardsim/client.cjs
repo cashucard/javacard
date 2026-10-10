@@ -350,20 +350,28 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 class CardSim {
   /**
    * @param {string} url   the bridge, default http://127.0.0.1:9876
-   * @param {{fetch?: Function}} [opts]  a fetch to use instead of the global one (tests)
+   * @param {{fetch?: Function, timeoutMs?: number}} [opts]
+   *   fetch: a fetch to use instead of the global one (tests).
+   *   timeoutMs: per-request deadline, default 5000, the same 5 s both apps'
+   *   transports put on /apdu. A bridge that stops answering (a handler
+   *   wedged behind a long request on the single card thread) fails the
+   *   call with an AbortError instead of hanging the loader for good.
    */
-  constructor(url = "http://127.0.0.1:9876", { fetch } = {}) {
+  constructor(url = "http://127.0.0.1:9876", { fetch, timeoutMs = 5000 } = {}) {
     this.url = url.replace(/\/+$/, "")
     this.fetch = fetch || globalThis.fetch
     if (typeof this.fetch !== "function") throw new TypeError("no fetch: Node 18+ or pass { fetch }")
+    if (!(Number.isFinite(timeoutMs) && timeoutMs > 0)) throw new RangeError(`timeoutMs must be a positive number, got ${timeoutMs}`)
+    this.timeoutMs = timeoutMs
   }
 
-  /** One HTTP round trip, no retry. Non-2xx → CardSimError. */
+  /** One HTTP round trip, no retry, bounded by `timeoutMs`. Non-2xx → CardSimError. */
   async request(method, path, body) {
     const res = await this.fetch(this.url + path, {
       method,
       headers: body === undefined ? {} : { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(this.timeoutMs),
     })
     const text = await res.text()
     let parsed

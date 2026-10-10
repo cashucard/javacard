@@ -196,4 +196,38 @@ class CardSimHttpTest {
     void busyPort() {
         assertThrows(BindException.class, () -> CardSim.start(sim.port()));
     }
+
+    @Test
+    @DisplayName("a card that cannot be built fails start() (main exits 1) and releases the port")
+    void cardBuildFailureFailsStart() throws Exception {
+        // The failure VersionMask.real() raises on an applet the TABLE does
+        // not know. It used to surface as a 500 on the first request, after
+        // main had already printed "listening".
+        sim.stop();
+        int port = sim.port();
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> CardSim.start(port, () -> {
+            throw new IllegalStateException("no VersionMask entry for applet 0.7: add one to VersionMask.TABLE");
+        }));
+        assertTrue(e.getMessage().contains("VersionMask.TABLE"), e.getMessage());
+
+        // The failed start stopped its server: the same port binds again and serves.
+        sim = CardSim.start(port);
+        assertEquals(200, get("/state").statusCode());
+    }
+
+    @Test
+    @DisplayName("GET /state carries counts {unspent, spent, empty} next to slots")
+    void stateCounts() throws Exception {
+        JsonObject fresh = json(get("/state")).getAsJsonObject("counts");
+        assertEquals(0, fresh.get("unspent").getAsInt());
+        assertEquals(0, fresh.get("spent").getAsInt());
+        assertEquals(32, fresh.get("empty").getAsInt());
+
+        String proof = "{\"keysetId\":\"0059534ce0bfa19a\",\"amount\":8,\"nonce\":\"" + "ab".repeat(32)
+            + "\",\"C\":\"02" + "11".repeat(32) + "\"}";
+        JsonObject loaded = json(post("/fixture", "{\"proofs\":[" + proof + "]}")).getAsJsonObject("counts");
+        assertEquals(1, loaded.get("unspent").getAsInt());
+        assertEquals(0, loaded.get("spent").getAsInt());
+        assertEquals(31, loaded.get("empty").getAsInt());
+    }
 }

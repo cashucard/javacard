@@ -113,6 +113,10 @@ class SimCardTest {
 
         JsonObject s = card.state();
         assertEquals(40, s.get("balance").getAsLong());
+        JsonObject counts = s.getAsJsonObject("counts");
+        assertEquals(2, counts.get("unspent").getAsInt(), "counts.unspent is GET_INFO byte 3");
+        assertEquals(1, counts.get("spent").getAsInt(), "counts.spent is GET_INFO byte 4");
+        assertEquals(29, counts.get("empty").getAsInt(), "counts.empty is GET_INFO byte 5");
         JsonArray slots = s.getAsJsonArray("slots");
         assertEquals(32, slots.size());
         JsonObject slot1 = slots.get(1).getAsJsonObject();
@@ -129,6 +133,28 @@ class SimCardTest {
         assertEquals(0x9000, SimCard.sw(cleared));
         assertEquals(1, cleared[0], "CLEAR_SPENT frees the one spent slot");
         assertEquals("010001", Hex.format(data(card.transmit(GET_SLOT_STATUS)), 0, 3));
+    }
+
+    @Test
+    @DisplayName("spentSlots index into the fixture's proofs, not into card slots, on an additive fixture")
+    void spentSlotsIndexTheFixturesProofs() throws FixtureException {
+        apply("{\"proofs\":[" + proof(NONCE_A, C_A, 8) + "]}");
+        // B lands in slot 1, C in slot 2; spentSlots:[0] names B (the
+        // fixture's first proof), so slot 1 is spent and slot 0 (A) untouched.
+        apply("{\"proofs\":[" + proof(NONCE_B, C_B, 16) + "," + proof(NONCE_C, C_C, 32) + "],\"spentSlots\":[0]}");
+
+        assertEquals("010201", Hex.format(data(card.transmit(GET_SLOT_STATUS)), 0, 3));
+        JsonObject s = card.state();
+        JsonArray slots = s.getAsJsonArray("slots");
+        assertEquals(NONCE_A, slots.get(0).getAsJsonObject().get("nonce").getAsString());
+        assertEquals("unspent", slots.get(0).getAsJsonObject().get("status").getAsString());
+        assertEquals(NONCE_B, slots.get(1).getAsJsonObject().get("nonce").getAsString());
+        assertEquals("spent", slots.get(1).getAsJsonObject().get("status").getAsString());
+        assertEquals(NONCE_C, slots.get(2).getAsJsonObject().get("nonce").getAsString());
+        assertEquals("unspent", slots.get(2).getAsJsonObject().get("status").getAsString());
+        assertEquals(8 + 32, s.get("balance").getAsLong());
+        assertEquals(2, s.getAsJsonObject("counts").get("unspent").getAsInt());
+        assertEquals(1, s.getAsJsonObject("counts").get("spent").getAsInt());
     }
 
     @Test
@@ -312,6 +338,27 @@ class SimCardTest {
             assertEquals("empty", s.getAsJsonArray("slots").get(i).getAsJsonObject().get("status").getAsString());
         }
         assertEquals("00069000", Hex.format(card.transmit(SimCard.SELECT)), "mask is real again");
+    }
+
+    @Test
+    @DisplayName("a fixture without appletVersion keeps the mask a previous fixture set; only reset restores it")
+    void fixtureWithoutVersionKeepsTheMask() throws FixtureException {
+        apply("{\"appletVersion\":\"0.4\"}");
+        assertEquals("00049000", Hex.format(card.transmit(SimCard.SELECT)), "masked to 0.4");
+
+        apply("{}");
+        assertEquals("00049000", Hex.format(card.transmit(SimCard.SELECT)), "an empty fixture is additive: still 0.4");
+        assertEquals("0.4", card.state().get("appletVersion").getAsString());
+
+        apply("{\"proofs\":[" + proof(NONCE_A, C_A, 8) + "]}");
+        assertEquals("00049000", Hex.format(card.transmit(SimCard.SELECT)), "a proofs-only fixture: still 0.4");
+
+        apply("{\"appletVersion\":\"0.5\"}");
+        assertEquals("00059000", Hex.format(card.transmit(SimCard.SELECT)), "a fixture that names a version changes it");
+
+        card.reset();
+        assertEquals("00069000", Hex.format(card.transmit(SimCard.SELECT)), "reset is the one way back to real");
+        assertEquals("0.6", card.state().get("appletVersion").getAsString());
     }
 
     @Test

@@ -115,12 +115,20 @@ final class SimCard {
      *   <li>SET_PUK — unverified while pinState is 0, so before SET_PIN;</li>
      *   <li>SET_PIN;</li>
      *   <li>three wrong VERIFY_PINs when blockedPin, expecting 63C2, 63C1, 6983;</li>
-     *   <li>the version mask;</li>
+     *   <li>the version mask, only when the fixture names one: a fixture
+     *       without {@code appletVersion} keeps the mask a previous fixture
+     *       set, as it keeps that fixture's proofs and PIN. Only
+     *       {@link #reset()} puts the mask back to the real version;</li>
      *   <li>SELECT, so the app's first command finds an unverified session.</li>
      * </ol>
      * The generation moves on success and on failure. A refused step leaves
      * the card as the steps before it left it, with {@code fixtureError} set
      * until the next fixture or reset.
+     *
+     * <p>LOAD_PROOF and SPEND_PROOF are PIN-gated (CashuApplet.requirePinIfSet),
+     * so {@code proofs} and {@code spentSlots} are accepted only while the card
+     * has no PIN: after a fixture that set one, a fixture carrying proofs is
+     * refused at LOAD_PROOF with 6982. Reset first.
      */
     void applyFixture(Fixture f) throws FixtureException {
         generation++;
@@ -146,7 +154,7 @@ final class SimCard {
                 expect("VERIFY_PIN", apdu(0x40, 0, 0, wrong, -1), 0x63C1);
                 expect("VERIFY_PIN", apdu(0x40, 0, 0, wrong, -1), 0x6983);
             }
-            mask = f.mask != null ? f.mask : real;
+            if (f.mask != null) mask = f.mask;
             expect("SELECT", SELECT, SW_OK);
         } catch (FixtureException e) {
             fixtureError = e;
@@ -182,6 +190,14 @@ final class SimCard {
         s.addProperty("balance", readUint32(balance, 0));
         s.addProperty("pinState", info[7] & 0xFF);
         s.addProperty("pukState", info.length > 8 ? info[8] & 0xFF : 0);
+
+        // GET_INFO bytes 3-5 (CashuApplet.processGetInfo): the applet's own
+        // tally, so a loader asserting "one unspent" needs no reduce over slots.
+        JsonObject counts = new JsonObject();
+        counts.addProperty("unspent", info[3] & 0xFF);
+        counts.addProperty("spent", info[4] & 0xFF);
+        counts.addProperty("empty", info[5] & 0xFF);
+        s.add("counts", counts);
 
         JsonArray slots = new JsonArray();
         for (int i = 0; i < status.length; i++) {

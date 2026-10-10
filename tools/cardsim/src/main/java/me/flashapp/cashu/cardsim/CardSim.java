@@ -13,8 +13,10 @@ import java.io.OutputStream;
 import java.net.BindException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 
 /**
  * cardsim: the real CashuApplet in jCardSim, served over loopback HTTP.
@@ -62,17 +64,24 @@ import java.util.concurrent.Executors;
  *       reset. On success, answers {@code /state}. Ends with a SELECT, so the
  *       app's first command finds an unverified session. {@code spentSlots}
  *       are spent on the <i>card</i> only (SPEND_PROOF over 32 zero bytes);
- *       the mint still holds those proofs live. See Fixture.java for the
+ *       the mint still holds those proofs live. {@code proofs} and
+ *       {@code spentSlots} are accepted only while the card has no PIN;
+ *       after a PIN fixture, {@code /reset} first (LOAD_PROOF is PIN-gated
+ *       and answers 409 {@code 6982}). A fixture without
+ *       {@code appletVersion} keeps the mask the previous fixture set; only
+ *       {@code /reset} restores the real version. See Fixture.java for the
  *       schema and SimCard.applyFixture for the order.</dd>
  *
  *   <dt>{@code GET /state}</dt>
  *   <dd>{@code {generation, appletVersion, realVersion, deterministicKey:
- *       true, pubkey, balance, pinState, pukState, slots: [{slot, status,
- *       keysetId?, amount?, nonce?, C?}], fixtureError?: {step, sw}}}, read
- *       through non-PIN-gated commands, unmasked, without touching the
- *       session. {@code generation} moves on every reset and fixture, so a
- *       loader can tell a card it set up from one another run left
- *       behind.</dd>
+ *       true, pubkey, balance, pinState, pukState, counts: {unspent, spent,
+ *       empty}, slots: [{slot, status, keysetId?, amount?, nonce?, C?}],
+ *       fixtureError?: {step, sw}}}, read through non-PIN-gated commands,
+ *       unmasked, without touching the session. {@code counts} is GET_INFO's
+ *       own tally (bytes 3-5), for a loader that asserts "one unspent"
+ *       without reducing over {@code slots}. {@code generation} moves on
+ *       every reset and fixture, so a loader can tell a card it set up from
+ *       one another run left behind.</dd>
  * </dl>
  *
  * Unknown path: 404. Wrong method: 405. Anything the server did not expect:
@@ -94,8 +103,11 @@ import java.util.concurrent.Executors;
  * <h2>Threads</h2>
  *
  * One handler thread. jCardSim keeps its runtime in a ThreadLocal, so the
- * simulator is constructed lazily on that thread and every APDU, reset and
- * fixture runs there. Concurrent requests are served one at a time.
+ * simulator is constructed on that thread, inside {@link #start(int)}, and
+ * every APDU, reset and fixture runs there. A card that cannot be built (an
+ * applet version VersionMask.TABLE does not know) fails {@code start()}
+ * before "listening" is ever printed, rather than answering 500 to every
+ * request. Concurrent requests are served one at a time.
  */
 public final class CardSim {
 
@@ -103,16 +115,27 @@ public final class CardSim {
     private static final Gson GSON = new Gson();
 
     private SimCard card;
+    private final Supplier<SimCard> cardFactory;
     private final HttpServer server;
     private final ExecutorService executor;
 
-    private CardSim(HttpServer server, ExecutorService executor) {
+    private CardSim(HttpServer server, ExecutorService executor, Supplier<SimCard> cardFactory) {
         this.server = server;
         this.executor = executor;
+        this.cardFactory = cardFactory;
     }
 
-    /** The bound server; port 0 picks a free one (tests). Throws BindException when the port is taken. */
+    /**
+     * The bound server with its card built; port 0 picks a free one (tests).
+     * Throws BindException when the port is taken, and IllegalStateException
+     * (the server stopped, the port released) when the card cannot be built.
+     */
     public static CardSim start(int port) throws IOException {
+        return start(port, SimCard::new);
+    }
+
+    /** {@link #start(int)} with the card's constructor swapped (tests). */
+    static CardSim start(int port, Supplier<SimCard> cardFactory) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
         ExecutorService executor = Executors.newSingleThreadExecutor(r -> {
             Thread t = new Thread(r, "cardsim-card");
@@ -120,9 +143,24 @@ public final class CardSim {
             return t;
         });
         server.setExecutor(executor);
-        CardSim cs = new CardSim(server, executor);
+        CardSim cs = new CardSim(server, executor, cardFactory);
         server.createContext("/", cs::handle);
         server.start();
+        // Build the card now, on the card thread, so a construction failure
+        // surfaces here instead of as a 500 on the first request.
+        try {
+            executor.submit(cs::card).get();
+        } catch (ExecutionException e) {
+            cs.stop();
+            Throwable cause = e.getCause();
+            if (cause instanceof RuntimeException) throw (RuntimeException) cause;
+            if (cause instanceof Error) throw (Error) cause;
+            throw new IllegalStateException("could not build the card: " + cause, cause);
+        } catch (InterruptedException e) {
+            cs.stop();
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while building the card", e);
+        }
         return cs;
     }
 
@@ -136,7 +174,7 @@ public final class CardSim {
     }
 
     private SimCard card() {
-        if (card == null) card = new SimCard();
+        if (card == null) card = cardFactory.get();
         return card;
     }
 
@@ -259,6 +297,12 @@ public final class CardSim {
             return;
         } catch (IOException e) {
             System.err.println("cardsim: could not listen on 127.0.0.1:" + port + ": " + e.getMessage());
+            System.exit(1);
+            return;
+        } catch (IllegalStateException e) {
+            // VersionMask.real() on an applet the TABLE does not know, or a
+            // SELECT that did not answer 9000 after install.
+            System.err.println("cardsim: could not build the card: " + e.getMessage());
             System.exit(1);
             return;
         }

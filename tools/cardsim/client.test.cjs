@@ -222,6 +222,27 @@ test("a non-2xx from the bridge is a CardSimError carrying the body", async () =
   await assert.rejects(sim.fixture({ pin: "5678" }), e => e instanceof CardSimError && e.status === 409 && e.body.sw === "6985")
 })
 
+test("every request carries an AbortSignal and a wedged bridge fails the call at timeoutMs", async () => {
+  // A fetch that honours the signal and otherwise never answers: the shape of
+  // a /fixture stuck behind a long request on the bridge's one card thread.
+  const seen = []
+  const fetch = (url, init) => new Promise((_, reject) => {
+    seen.push(init)
+    init.signal.addEventListener("abort", () => reject(init.signal.reason))
+  })
+  const sim = new CardSim("http://127.0.0.1:9", { fetch, timeoutMs: 20 })
+  const started = Date.now()
+  await assert.rejects(sim.fixture({ pin: "1234" }), e => e.name === "TimeoutError")
+  assert.ok(Date.now() - started < 2000, "failed at the deadline, not the 360-minute CI default")
+  assert.ok(seen[0].signal instanceof AbortSignal)
+  assert.equal(seen.length, 1, "a timed-out request is not retried")
+
+  const dflt = new CardSim("http://127.0.0.1:9", { fetch: async () => ({ ok: true, status: 200, text: async () => "{}" }) })
+  assert.equal(dflt.timeoutMs, 5000, "the default matches the apps' 5 s transport deadline")
+  assert.throws(() => new CardSim("http://127.0.0.1:9", { fetch, timeoutMs: 0 }), RangeError)
+  assert.throws(() => new CardSim("http://127.0.0.1:9", { fetch, timeoutMs: Infinity }), RangeError)
+})
+
 test("waitReady is bounded", async () => {
   let calls = 0
   const sim = new CardSim("http://127.0.0.1:1", { fetch: async () => { calls++; throw new Error("down") } })

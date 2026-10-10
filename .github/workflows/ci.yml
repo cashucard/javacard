@@ -44,6 +44,10 @@ jobs:
   cardsim:
     name: cardsim bridge (JDK ${{ matrix.java }})
     runs-on: ubuntu-latest
+    # A wedged bridge used to hang this job for the 360-minute default; the
+    # client's own 5 s request deadline makes a wedge fail fast, and this is
+    # the backstop for anything the client does not cover (the jar start, mvn).
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
