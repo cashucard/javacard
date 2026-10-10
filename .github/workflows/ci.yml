@@ -41,6 +41,66 @@ jobs:
       - name: Run tests
         run: mvn -B -f applet/pom.xml test
 
+  cardsim:
+    name: cardsim bridge (JDK ${{ matrix.java }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        java: ['11', '17']
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # tools/cardsim compiles applet/src/main/java in as a second source
+      # root, so this also proves the applet still builds from a path other
+      # than its own pom. Runs the Java suite and produces target/cardsim.jar.
+      - name: Build and test the bridge
+        run: mvn -B -f tools/cardsim/pom.xml package
+
+      # The jar the app repos run: start it the way they will and prove the
+      # real applet answers SELECT through it before the client suite runs.
+      - name: Start the bridge
+        run: |
+          java -jar tools/cardsim/target/cardsim.jar --port 9876 &
+          for i in $(seq 1 60); do
+            curl -sf localhost:9876/state > /dev/null && exit 0
+            sleep 0.5
+          done
+          echo "::error::cardsim did not answer /state within 30 s"
+          exit 1
+
+      - name: Smoke-test SELECT over HTTP
+        run: |
+          curl -sf -X POST localhost:9876/apdu -d '{"hex":"00A4040007D2760000850102"}' \
+            | grep -q '"hex":"00069000"'
+
+      # The integration cases in client.test.cjs run only with CARDSIM_URL;
+      # the e2e-tools job runs the same file without it and gets the pure
+      # cases alone, so that job stays jar-free.
+      - name: Client tests against the bridge
+        run: CARDSIM_URL=http://127.0.0.1:9876 node --test tools/cardsim/client.test.cjs
+
+      # The app repos build this repo from a pinned ref for now; the artifact
+      # is for a human pulling a jar off a run (release asset later).
+      - name: Upload cardsim.jar
+        if: matrix.java == '17'
+        uses: actions/upload-artifact@v5
+        with:
+          name: cardsim-jar
+          path: tools/cardsim/target/cardsim.jar
+          if-no-files-found: error
+
   cardctl:
     name: cardctl tests (Python ${{ matrix.python }})
     runs-on: ubuntu-latest
@@ -91,8 +151,10 @@ jobs:
         with:
           node-version: '22'
 
-      # Argument parsing for tools/e2e-melt.cjs. Needs no card and no
-      # cashu-client build: the test only loads parseArgs/recoveredPath.
+      # Argument parsing for tools/e2e-melt.cjs, and the pure half of
+      # tools/cardsim/client.test.cjs (encoders, parsers, no-retry). Needs no
+      # card, no cashu-client build and no bridge: the cardsim integration
+      # cases skip without CARDSIM_URL (the cardsim job runs them).
       # The glob is quoted so node, not the shell, expands it (Node 21+ treats
       # positional args as file paths, so a bare directory does not work).
       - name: Run tests
