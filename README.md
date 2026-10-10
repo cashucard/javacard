@@ -146,12 +146,35 @@ Override the kit with `-Djc.sdk=/path/to/jc305u4_kit`. Installing onto a card:
 
 ```bash
 mvn -f applet/pom.xml test        # applet — jCardSim, no hardware needed
+mvn -f tools/cardsim/pom.xml test # card simulator bridge, same jCardSim
 cd tools/cardctl && python3 test_bip340.py && python3 test_apdu.py
 ```
 
-CI runs both on every push. **A green suite is not evidence about silicon** —
+CI runs all three on every push. **A green suite is not evidence about silicon** —
 jCardSim runs on the JVM with a garbage collector and cannot reproduce EEPROM
 exhaustion or hardware crypto framing. See [D10](docs/DECISIONS.md#d10).
+
+## Card simulator
+
+`tools/cardsim/` serves the real applet, inside jCardSim, on
+`http://127.0.0.1:9876` so an app's fake NFC transport can run end-to-end
+tests on a simulator or emulator without a reader:
+
+```bash
+tools/cardsim/cardsim.sh                               # from source, via Maven
+mvn -B -f tools/cardsim/pom.xml package && java -jar tools/cardsim/target/cardsim.jar
+curl -s -X POST localhost:9876/apdu -d '{"hex":"00A4040007D2760000850102"}'   # {"hex":"00069000","sw":"9000"}
+```
+
+Endpoints: `POST /apdu` (raw bytes in, data‖SW out, never retried),
+`POST /reset` (a brand-new card), `POST /fixture` (proofs, spent slots, PIN,
+PUK, blocked PIN, an older applet version to emulate), `GET /state`.
+`tools/cardsim/client.cjs` is a zero-dependency Node client with the
+`cardctl` command set. Two things a loader has to know: SELECT starts a
+session, as a tap does; and the simulator's card key is the same after
+every `/reset`, so mint proofs per run. The header of
+`tools/cardsim/src/main/java/me/flashapp/cashu/cardsim/CardSim.java` is the
+contract.
 
 ## Project layout
 
@@ -159,6 +182,7 @@ exhaustion or hardware crypto framing. See [D10](docs/DECISIONS.md#d10).
 applet/src/main/java/   applet source (JavaCard 3.0.5+)
 applet/src/test/java/   jCardSim test suite
 tools/cardctl/          PC/SC host driver + its own tests
+tools/cardsim/          jCardSim card over localhost HTTP for app e2e
 spec/                   NUT-XX.md (protocol), APDU.md (wire format),
                         CARD-FILE.md (host↔mint interchange format)
 docs/                   vision, architecture, decisions, security, glossary

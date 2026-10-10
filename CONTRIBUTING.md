@@ -86,10 +86,12 @@ more here than in an ordinary repo:
 
 ```bash
 mvn -f applet/pom.xml test                    # applet
+mvn -f tools/cardsim/pom.xml test             # card simulator bridge (compiles the applet in)
 cd tools/cardctl && python3 test_bip340.py && python3 test_apdu.py
+node --test 'tools/**/*.test.cjs'             # Node tools; set CARDSIM_URL for the bridge's integration cases
 ```
 
-No hardware required for either.
+No hardware required for any of them.
 
 ### Building the CAP
 
@@ -97,8 +99,9 @@ No hardware required for either.
 ant -f applet/build.xml cap
 ```
 
-CI runs the applet suite on JDK 11 and 17, the `cardctl` suite on Python 3.11
-and 3.13, and the CAP conversion, on every push. The conversion is also
+CI runs the applet suite and the `tools/cardsim` bridge (its Java suite, then
+the shaded jar started and driven by the Node client) on JDK 11 and 17, the
+`cardctl` suite on Python 3.11 and 3.13, and the CAP conversion, on every push. The conversion is also
 compared with the CAP tracked at `applet/target/cashu-javacard-0.1.0.cap`: every
 entry but `META-INF/MANIFEST.MF` must match, and
 [`docs/HARDWARE_DEPLOYMENT.md`](docs/HARDWARE_DEPLOYMENT.md) must publish the
