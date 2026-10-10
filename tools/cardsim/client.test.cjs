@@ -223,24 +223,41 @@ test("a non-2xx from the bridge is a CardSimError carrying the body", async () =
 })
 
 test("every request carries an AbortSignal and a wedged bridge fails the call at timeoutMs", async () => {
-  // A fetch that honours the signal and otherwise never answers: the shape of
-  // a /fixture stuck behind a long request on the bridge's one card thread.
-  const seen = []
-  const fetch = (url, init) => new Promise((_, reject) => {
-    seen.push(init)
-    init.signal.addEventListener("abort", () => reject(init.signal.reason))
-  })
-  const sim = new CardSim("http://127.0.0.1:9", { fetch, timeoutMs: 20 })
-  const started = Date.now()
-  await assert.rejects(sim.fixture({ pin: "1234" }), e => e.name === "TimeoutError")
-  assert.ok(Date.now() - started < 2000, "failed at the deadline, not the 360-minute CI default")
-  assert.ok(seen[0].signal instanceof AbortSignal)
-  assert.equal(seen.length, 1, "a timed-out request is not retried")
+  // A real server that accepts the request and never answers: the shape of a
+  // /fixture stuck behind a long request on the bridge's one card thread. It
+  // has to be a real socket, not a fake fetch that only settles on abort:
+  // AbortSignal.timeout()'s timer is unref'd, so with nothing else holding
+  // the loop open Node 22 drains the loop before the deadline and node:test
+  // cancels the pending test (and every test after it). In production the
+  // socket is what keeps the loop alive, as it does here. The deadline is
+  // well above the first fetch's cold start (undici loads lazily, ~15 ms on
+  // a warm laptop) so the request has reached the server when it fires.
+  const http = require("node:http")
+  const hits = []
+  const sockets = new Set()
+  const server = http.createServer(req => { hits.push(req.url) })
+  server.on("connection", s => { sockets.add(s); s.on("close", () => sockets.delete(s)) })
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve))
+  try {
+    const seen = []
+    const fetch = (url, init) => { seen.push(init); return globalThis.fetch(url, init) }
+    const sim = new CardSim(`http://127.0.0.1:${server.address().port}`, { fetch, timeoutMs: 250 })
+    const started = Date.now()
+    await assert.rejects(sim.fixture({ pin: "1234" }), e => e.name === "TimeoutError")
+    assert.ok(Date.now() - started < 2000, "failed at the deadline, not the 360-minute CI default")
+    assert.ok(seen[0].signal instanceof AbortSignal)
+    assert.equal(seen.length, 1, "a timed-out request is not retried")
+    assert.deepEqual(hits, ["/fixture"], "the request reached the server exactly once")
+  } finally {
+    for (const s of sockets) s.destroy()
+    await new Promise(resolve => server.close(resolve))
+  }
 
-  const dflt = new CardSim("http://127.0.0.1:9", { fetch: async () => ({ ok: true, status: 200, text: async () => "{}" }) })
+  const ok = async () => ({ ok: true, status: 200, text: async () => "{}" })
+  const dflt = new CardSim("http://127.0.0.1:9", { fetch: ok })
   assert.equal(dflt.timeoutMs, 5000, "the default matches the apps' 5 s transport deadline")
-  assert.throws(() => new CardSim("http://127.0.0.1:9", { fetch, timeoutMs: 0 }), RangeError)
-  assert.throws(() => new CardSim("http://127.0.0.1:9", { fetch, timeoutMs: Infinity }), RangeError)
+  assert.throws(() => new CardSim("http://127.0.0.1:9", { fetch: ok, timeoutMs: 0 }), RangeError)
+  assert.throws(() => new CardSim("http://127.0.0.1:9", { fetch: ok, timeoutMs: Infinity }), RangeError)
 })
 
 test("waitReady is bounded", async () => {

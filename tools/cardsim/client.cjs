@@ -299,9 +299,11 @@ function isHexOf(value, bytes) {
 }
 
 /**
- * The same checks the server runs, so a bad fixture fails here, in the
- * test's own stack, instead of as a 400 from the bridge. Throws on the first
- * problem; returns the fixture unchanged.
+ * The checks the server can run on the body alone, so a malformed fixture
+ * fails here, in the test's own stack. A puk under a mask kept from an
+ * earlier fixture is only the server's to refuse (400 CardSimError): it
+ * depends on /state.appletVersion. Throws on the first problem; returns the
+ * fixture unchanged.
  */
 function validateFixture(f) {
   if (!f || typeof f !== "object" || Array.isArray(f)) throw new TypeError("fixture must be an object")
