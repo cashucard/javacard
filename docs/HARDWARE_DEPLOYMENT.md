@@ -60,8 +60,11 @@ The build then takes the Descriptor component out (`tools/stripcap.py`: the chip
 keeps nothing of it) and checks the load file's size against what the J3R180 has
 been seen to install (`tools/refcheck.py`, from
 [FOXY-CARD-HARDWARE.md](FOXY-CARD-HARDWARE.md)). The 2.0 build is **20,060 bytes**
-(92 past a multiple of 256), a size not yet tried on the chip: refcheck says so and
-passes it. Install it on a test card first; if the chip refuses it, move it with
+by refcheck's measure (92 past a multiple of 256). It was a size not yet tried on the
+chip until ENG-681: v2.0.0-rc.1 (this CAP, sha256 `59f66673…`) installed on the
+J3R180 with the opener first, at 20,057 bytes as the install counted the load file,
+and refcheck's table now has it as a size that installs ([D25](DECISIONS.md#d25)).
+If a later build lands on a size the chip refuses, move it with
 `CashuApplet.sizeTheFile` to a size known to install and add the answer to
 refcheck's table.
 
@@ -119,7 +122,7 @@ diff -r -x MANIFEST.MF /tmp/cap-tracked /tmp/cap-built && echo "same CAP as the 
 ```
 
 Any output from `diff` means the two CAPs differ; do not install. After
-installing, `SELECT` must answer `02 00` (below).
+installing, `SELECT` must answer `02 00` for the card's applet's whole AID (below).
 
 ```bash
 # Load the file and instantiate the opener (gp installs one applet of a file at a time)...
@@ -167,11 +170,14 @@ holder's phone (flash-mobile's "Set up this card").
 ## Test install / select / deselect lifecycle
 
 ```bash
-# SELECT the applet by its package AID
-gp --apdu 00A404000AF0434153485543415244
+# SELECT the card's applet by its whole AID, F0 CASHUCARD 01
+gp --apdu 00A404000BF043415348554341524401
 
 # Response: 0200 9000  (applet version 2.0 + SW_OK = applet responding)
 # A card that answers 6A82 has no 2.0 applet: it is a 0.x or Foxy 1.x card and needs an update.
+# Do not SELECT the package AID alone (00A404000AF0434153485543415244): on the chip that
+# partial name reaches the opener, instantiated first, which answers 9000 with no version
+# and 6D00 to every command after it (D25).
 
 # GET_INFO (INS 0x01)
 gp --apdu B0010000
@@ -186,7 +192,16 @@ gp --apdu B0100000
 # Response: 33-byte compressed secp256k1 public key + SW 9000
 ```
 
-`cardctl selftest` passes a card answering `02 00` and fails any other.
+`cardctl selftest` passes a card answering `02 00` and fails any other. cardctl
+selects the whole AID first and takes a `9000` without a version as no answer.
+
+**On the chip (ENG-681, 2026-10-13).** v2.0.0-rc.1 installed on the J3R180 in the
+order above (the opener, then the card's applet, then the tag), at 20,057 bytes.
+`SELECT` of `F0 43 41 53 48 55 43 41 52 44 01` answered `02 00 9000`; `SELECT` of the
+package AID `F0 43 41 53 48 55 43 41 52 44` answered `9000` with no body, and the next
+command `6D00`: the opener. `cardctl selftest` passed 12 of 12 once it selected the
+whole AID first, and `AUTH` took 833 to 854 ms a signature on an ACR122U (0.4 took
+814 ms; the constant-time multiply of [D21](DECISIONS.md#d21) costs about 3%).
 
 ---
 
@@ -270,7 +285,8 @@ install time as `CLEAR_ON_DESELECT` transient arrays, threaded through the
 arithmetic helpers as explicit `(work, workOff)` parameters.
 
 D21 changes the multiply's timing: re-measure `cardctl --timing selftest` (AUTH)
-and a payment's `SPEND_ALL_SIGN` on the J3R180 before release.
+and a payment's `SPEND_ALL_SIGN` on the J3R180 before release. AUTH is measured
+(ENG-681, above: 833 to 854 ms, about 3% over 0.4); `SPEND_ALL_SIGN` is still to be.
 
 ### Install-time ECDH framing probe
 
@@ -306,7 +322,8 @@ Protocol 2.0 ([D19](DECISIONS.md#d19)):
 | Card's applet | `F0 43 41 53 48 55 43 41 52 44 01` |
 | Tag, class (listed last in the file) | `F0 43 41 53 48 55 43 41 52 44 54` |
 | Tag, instance (the NFC Forum's NDEF Tag Application; what a phone selects) | `D2 76 00 00 85 01 01` |
-| SELECT | `00 A4 04 00 0A F0 43 41 53 48 55 43 41 52 44` |
+| SELECT (the card's applet, whole: what a reader sends, [D25](DECISIONS.md#d25)) | `00 A4 04 00 0B F0 43 41 53 48 55 43 41 52 44 01` |
+| SELECT of the package AID alone (reaches the opener on the chip: `90 00`, no version) | `00 A4 04 00 0A F0 43 41 53 48 55 43 41 52 44` |
 
 Withdrawn, and answered `6A82` by a 2.0 card: the 0.x applet's
 `D2 76 00 00 85 01 02` (package) and `D2 76 00 00 85 01 02 01` (applet), and

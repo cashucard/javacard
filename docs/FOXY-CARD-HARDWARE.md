@@ -90,6 +90,14 @@ store, took about 130 ms on the chip, and a `RESET_CARD`, which fills the
 store with zeros, about 270 ms (`tools/chip/proofstore.sh`, 27 checks, all
 held on the chip).
 
+The shared protocol's 2.0 (v2.0.0-rc.1, ENG-681) installed at 20,060 bytes by
+refcheck's measure (92 past a multiple of 256; the install counted the load file
+as 20,057), with the opener first, the first size tried. A SELECT by the package
+AID alone then reached the opener and not the card's applet: the chip gives a
+partial name to the first instance made whose AID begins with it, so readers
+select the card's applet by its whole AID (DECISIONS D25). `cardctl selftest`
+passed 12 of 12, and `AUTH` took 833 to 854 ms a signature on an ACR122U.
+
 What the software does: `CashuApplet.sizeTheFile` is never called and is in
 the package for its length alone, about six bytes a line, so that a build
 can be moved to a size that is known to install; `tools/refcheck.py`, after

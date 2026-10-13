@@ -82,7 +82,8 @@ card. Produced by `ant cap`.
 **AID** — Application Identifier, the applet's address. `SELECT` by AID picks
 which applet a reader is talking to. Protocol 2.0: package AID
 `F0434153485543415244` ("CASHUCARD" after `F0`), applet AID `…01`
-([D19](DECISIONS.md#d19)). 0.x used `D2760000850102` and Foxy's 1.x
+([D19](DECISIONS.md#d19)). Readers select the applet AID whole; the package AID
+alone reaches the opener on a chip ([D25](DECISIONS.md#d25)). 0.x used `D2760000850102` and Foxy's 1.x
 `F0464F585943415244`; a 2.0 card answers neither.
 
 **EEPROM** — the card's persistent memory. **`new` allocates here and is never

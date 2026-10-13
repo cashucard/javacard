@@ -165,7 +165,8 @@ compromised or truncated download.
         Applet  AID : F0 43 41 53 48 55 43 41 52 44 01   (package + 01)
         Tag class   : F0 43 41 53 48 55 43 41 52 44 54   (package + 54; instantiated as D2 76 00 00 85 01 01)
 
-      The package AID is also the SELECT AID used by NFC readers.
+      NFC readers SELECT the applet's whole AID (D25). On the chip a SELECT by the
+      package AID alone reaches the opener, instantiated first (9000, no version).
     -->
     <target name="cap" depends="setup"
             description="Build CashuApplet.cap (JavaCard 3.0.5)">

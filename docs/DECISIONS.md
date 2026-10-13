@@ -4,7 +4,7 @@ Each entry records a call that was made, what was rejected, and why. If you are
 about to change one of these, read the entry first — most were made against a
 real alternative, and several were made *after* getting it wrong once.
 
-Anchors are stable (`#d1` … `#d24`); other docs link to them. D15 and D16
+Anchors are stable (`#d1` … `#d25`); other docs link to them. D15 and D16
 are superseded by the 2.0 merge ([D18](#d18)) and kept for the record.
 
 ---
@@ -853,7 +853,9 @@ item 5).
 
 **Cost accepted.** A zero row now costs what any row costs, about one row in
 256 on random input; the carry write is cheaper than the loop it replaces.
-Re-measure `cardctl --timing` on the J3R180 before release. What this does not
+Re-measure `cardctl --timing` on the J3R180 before release (`AUTH`, measured
+under ENG-681: 833 to 854 ms a signature on an ACR122U, against 814 ms for 0.4,
+about 3% more; [D25](#d25)). What this does not
 reach: the modular reductions on the same signing path, which still branch on
 values derived from the key and the nonce (`reduce512toModN` over e·d,
 `addModN` over k + e·d, `reduceModN` over k, the `sub32` and `cmp32` they
@@ -956,6 +958,57 @@ the hardest header taken) carries it from there.
 difficulty must always pass, and the difficulty moves by up to four times a
 retarget; a quarter of the work leaves room for the network to fall and still
 costs a forger a quarter of a block's work (about 2^77 hashes) per day it buys.
+
+---
+
+## <a id="d25"></a>D25 — Readers select the card's applet by its whole AID
+
+**Decided (ENG-681):** a reader selects the card's applet by its whole instance
+AID, `F0 43 41 53 48 55 43 41 52 44 01` (`00 A4 04 00 0B F0 43 41 53 48 55 43 41
+52 44 01`), and answers `02 00` there. The package AID `F0 43 41 53 48 55 43 41 52
+44` ([D19](#d19)) is not the SELECT AID. A reader may fall back to it after a
+`6A82`, but takes a `90 00` that carries no version as no answer. `cardctl`, the
+cardsim client, `spec/APDU.md`, `spec/NUT-XX.md` and
+[`HARDWARE_DEPLOYMENT.md`](HARDWARE_DEPLOYMENT.md) say so.
+
+**Why.** A SELECT by the package AID is a partial name: three of the package's
+AIDs begin with it, the opener's (`…44 4D`), the card's applet's (`…44 01`) and the
+tag's class (`…44 54`). The chip gives a partial name to the first instance it
+made whose AID begins with the name, and the opener is made first, because the
+J3R180 will not take the card's applet as the package's first instance
+([FOXY-CARD-HARDWARE.md](FOXY-CARD-HARDWARE.md)). So on a chip the package AID
+reaches the opener, which answers its SELECT with `90 00` and nothing else, and
+`6D 00` to every command after. The suites run in jCardSim, where the package
+AID reached the card's applet: jCardSim keeps its applets sorted by AID and gives
+a partial name to the lowest that matches, and `…44 01` sorts before `…44 4D`.
+So every suite passed a SELECT that the chip answers with the opener.
+
+**The hardware evidence (2026-10-13).** v2.0.0-rc.1 (the tracked CAP, sha256
+`59f66673…`) installed on the J3R180 per [`HARDWARE_DEPLOYMENT.md`](HARDWARE_DEPLOYMENT.md):
+the opener `F0 CASHUCARD 4D` first, then the card's applet `F0 CASHUCARD 01`, then
+the tag. It installed at 20,057 bytes as the install counted the load file (20,060 by
+`tools/refcheck.py`'s measure, which had it as a size not yet tried; it is now in
+refcheck's table as one that installs). A SELECT of `F0434153485543415244` answered
+`9000` with no body, and the next command `6D00`; a SELECT of
+`F043415348554341524401` answered `0200 9000`. `cardctl selftest`, which selected
+the package AID first, failed; with the whole AID selected first it passed 12 of
+12, `AUTH` taking 833 to 854 ms a signature on an ACR122U (0.4 took 814 ms: the
+constant-time multiply of [D21](#d21) costs about 3%). Foxy's wallet already
+selects the whole AID only.
+
+**Rejected: instantiate the card's applet first, or give the opener an AID that
+the package AID does not begin.** The first is what the chip refuses (the reason
+the opener exists). The second changes the CAP the 2.0 release candidate ships and
+that Foxy's wallet already reads by its whole AID, for a reader that has no reason
+to use a partial name. **Rejected: keep the package AID first and fall through on
+a bare `90 00`.** It costs a SELECT on every tap of every 2.0 card, and leaves a
+reader that does not know the rule on the opener.
+
+**The simulator follows the chip.** `tools/cardsim` installs the opener first and
+resolves a partial name itself, to the first instance installed whose AID begins
+with it (`SimCard.resolveSelect`), so an app's e2e run against the bridge meets
+the opener where a chip would put it. The applet's own suites install the card's
+applet alone, where either SELECT reaches it.
 
 ---
 

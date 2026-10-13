@@ -39,6 +39,7 @@ SIZES = {
     18123: True, 18315: False, 18337: False, 18340: False, 18352: False, 18425: True, 18486: True,
     19267: True, 19269: True, 19280: True,
     19634: True,
+    20060: True,  # v2.0.0-rc.1 (sha256 59f66673...), ENG-681: the install counted 20,057; selftest 12/12
 }
 NEAR = 8  # bytes: a size this close to one that failed is treated as that one
 PAGE = 256

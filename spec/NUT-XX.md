@@ -33,9 +33,12 @@ listed in [`docs/FOR-LNFLASH.md`](../docs/FOR-LNFLASH.md) section 3.
 
 ## Definitions
 
-- **Card**: an ISO 14443-4 NFC device running the applet, selected by the AID
-  `F0 43 41 53 48 55 43 41 52 44` ("CASHUCARD" after the proprietary RID byte
-  `F0`), version `02 00`.
+- **Card**: an ISO 14443-4 NFC device running the applet, selected by the
+  applet's whole AID `F0 43 41 53 48 55 43 41 52 44 01` (the package AID
+  `F0 43 41 53 48 55 43 41 52 44`, "CASHUCARD" after the proprietary RID byte
+  `F0`, and `01`), version `02 00`. A SELECT by the package AID alone is a
+  partial name, and a chip gives it to the package's first instance, the opener,
+  which answers `90 00` with no version (see [AID assignment](#aid-assignment)).
 - **Card key** (`P_card`): a secp256k1 key pair made on the card at install. The
   private half never leaves it. `GET_PUBKEY` answers the public half, compressed.
 - **Card piece**: a Cashu `Proof` whose `secret` is the NUT-10 P2PK secret below,
@@ -212,9 +215,14 @@ end-to-end tests run against Nutshell 0.20.3.
 ## AID assignment
 
 `F0 43 41 53 48 55 43 41 52 44` is a proprietary AID (RID byte `F0`), naming the
-protocol and no wallet. The 0.x draft's `D2 76 00 00 85 01 02` sat under the NFC
-Forum's RID and is withdrawn. A card that does not answer the 2.0 AID is not a 2.0
-card, and a wallet treats it as one that needs an update.
+protocol and no wallet. It is the package's AID; the card's applet is instantiated
+under it and `01`, after an opener under it and `4D` that the chip needs made first.
+A reader selects `F0 43 41 53 48 55 43 41 52 44 01`, the whole AID: a SELECT by
+the package AID alone reaches the opener on a chip (`90 00` with no version, then
+`6D 00` to every command), and a reader that tries it takes an answer without the
+two version bytes as no answer. The 0.x draft's `D2 76 00 00 85 01 02` sat under
+the NFC Forum's RID and is withdrawn. A card that does not answer the 2.0 AID is
+not a 2.0 card, and a wallet treats it as one that needs an update.
 
 ---
 
