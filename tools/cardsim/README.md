@@ -203,8 +203,9 @@ lowest matching AID in sort order (the card's applet), so the bridge resolves th
 name itself before jCardSim sees it (`SimCard.resolveSelect`); a whole AID, a name
 that begins no instance and a "next occurrence" SELECT pass through unchanged.
 `GET /state` and `/fixture` read the card's applet wherever the app left the
-selection: `/state` puts the app's selection back after its reads, and a fixture
-ends with the card's applet selected, as before.
+selection: `/state` puts the app's selection back after its reads (with the tag
+selected, the file the app chose on it too, so a `READ BINARY` after `/state` reads
+the same file), and a fixture ends with the card's applet selected, as before.
 
 ```bash
 curl -s -X POST localhost:9876/apdu -d '{"hex":"00A404000AF0434153485543415244"}'

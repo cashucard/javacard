@@ -994,13 +994,15 @@ refcheck's table as one that installs). A SELECT of `F0434153485543415244` answe
 the package AID first, failed; with the whole AID selected first it passed 12 of
 12, `AUTH` taking 833 to 854 ms a signature on an ACR122U (0.4 took 814 ms: the
 constant-time multiply of [D21](#d21) costs about 3%). Foxy's wallet already
-selects the whole AID only.
+selects by a whole AID only: today its 1.x card's ten bytes `F0 FOXYCARD 01`
+(`00 A4 04 00 0A F0 46 4F 58 59 43 41 52 44 01 00`), never a package prefix; on
+2.0 the whole AID is the eleven bytes above.
 
 **Rejected: instantiate the card's applet first, or give the opener an AID that
 the package AID does not begin.** The first is what the chip refuses (the reason
-the opener exists). The second changes the CAP the 2.0 release candidate ships and
-that Foxy's wallet already reads by its whole AID, for a reader that has no reason
-to use a partial name. **Rejected: keep the package AID first and fall through on
+the opener exists). The second changes the CAP the 2.0 release candidate ships,
+for a reader that has no reason to use a partial name: Foxy's wallet already
+selects by a whole AID only. **Rejected: keep the package AID first and fall through on
 a bare `90 00`.** It costs a SELECT on every tap of every 2.0 card, and leaves a
 reader that does not know the rule on the opener.
 

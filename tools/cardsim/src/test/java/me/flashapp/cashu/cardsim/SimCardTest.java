@@ -130,6 +130,56 @@ class SimCardTest {
         assertEquals(SimCard.TAG_HEX, card.selected());
     }
 
+    static final byte[] SELECT_TAG = Hex.parse("00A4040007" + SimCard.TAG_HEX + "00");
+    static final byte[] SELECT_NDEF_FILE = Hex.parse("00A4000C02E104");
+    static final byte[] READ_NDEF = Hex.parse("00B0000016");
+
+    @Test
+    @DisplayName("with a file chosen on the tag, state() keeps it chosen: the app's next READ BINARY reads the same bytes")
+    void stateKeepsTheTagsChosenFile() {
+        assertEquals(0x9000, SimCard.sw(card.transmit(SELECT_TAG)));
+        assertEquals("9000", Hex.format(card.transmit(SELECT_NDEF_FILE)));
+        byte[] before = card.transmit(READ_NDEF);
+        assertEquals(0x9000, SimCard.sw(before));
+        assertEquals(24, before.length, "the NDEF file's 22 bytes and the status word");
+
+        assertEquals("2.0", card.state().get("version").getAsString());
+        assertEquals(SimCard.TAG_HEX, card.selected());
+        assertArrayEquals(before, card.transmit(READ_NDEF), "the file the app chose is still chosen after /state");
+
+        // and a fixture's check (context()) does the same
+        card.context();
+        assertArrayEquals(before, card.transmit(READ_NDEF), "and after the fixture's read of the card");
+    }
+
+    @Test
+    @DisplayName("with no file chosen on the tag, state() chooses none: READ BINARY is refused before it and after it")
+    void stateChoosesNoFileOnTheTag() {
+        assertEquals(0x9000, SimCard.sw(card.transmit(SELECT_TAG)));
+        assertEquals("6986", Hex.format(card.transmit(READ_NDEF)), "no file chosen yet");
+        card.state();
+        assertEquals("6986", Hex.format(card.transmit(READ_NDEF)), "still none after /state");
+
+        // a file chosen in an earlier selection of the tag is not brought back: a new SELECT cleared it on the chip
+        assertEquals("9000", Hex.format(card.transmit(SELECT_NDEF_FILE)));
+        assertEquals(0x9000, SimCard.sw(card.transmit(SELECT_TAG)));
+        card.state();
+        assertEquals("6986", Hex.format(card.transmit(READ_NDEF)), "the tag selected again has no file chosen");
+
+        // nor across a stay on another instance
+        assertEquals("9000", Hex.format(card.transmit(SELECT_NDEF_FILE)));
+        assertEquals("02009000", Hex.format(card.transmit(SimCard.SELECT)));
+        assertEquals(0x9000, SimCard.sw(card.transmit(SELECT_TAG)));
+        card.state();
+        assertEquals("6986", Hex.format(card.transmit(READ_NDEF)));
+
+        // a refused SELECT of a file leaves the chosen file as it was, as the tag does
+        assertEquals("9000", Hex.format(card.transmit(SELECT_NDEF_FILE)));
+        assertEquals("6A82", Hex.format(card.transmit(Hex.parse("00A4000C02E105"))));
+        card.state();
+        assertEquals(24, card.transmit(READ_NDEF).length, "E104 is still the file chosen");
+    }
+
     @Test
     @DisplayName("a fixture applied with the opener selected sets the card up and leaves the card's applet selected")
     void fixtureWithTheOpenerSelected() throws FixtureException {

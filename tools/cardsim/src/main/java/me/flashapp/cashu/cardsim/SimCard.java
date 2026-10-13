@@ -28,8 +28,10 @@ import java.util.Arrays;
  * <p><b>The bridge's own reads find the card's applet wherever the app left the selection.</b> {@link #state()} and the
  * fixture's checks read the card's applet; when the app has selected another instance (the opener, by the package AID,
  * or the tag), they select the card's applet for the reads and then select the app's instance again, so the app's next
- * command reaches what it reached before. {@link #applyFixture} selects the card's applet first in that case; it ends
- * with a SELECT of the card's applet either way.
+ * command reaches what it reached before. Selecting the tag again clears the file it had chosen (CLEAR_ON_DESELECT), so
+ * when the app had chosen one the bridge sends the app's last SELECT of that file again as well, and a READ BINARY after
+ * {@code /state} reads what it would have read without it. {@link #applyFixture} selects the card's applet first in
+ * that case; it ends with a SELECT of the card's applet either way.
  *
  * <p><b>Thread confinement.</b> jCardSim keeps the active runtime in a {@code ThreadLocal}
  * ({@code SimulatorSystem.currentRuntime}), set when the simulator is constructed. Every call on this object — the
@@ -85,6 +87,12 @@ final class SimCard {
     private CardSimulator sim;
     /** The instance the last successful SELECT by name reached, as an {@link #INSTANCES} entry. */
     private String selected;
+    /**
+     * The app's last successful SELECT of a file on the tag (P1 00, P2 0C) since the tag was last selected, or null. The
+     * tag keeps the file chosen in CLEAR_ON_DESELECT memory, so {@link #onTheCard} sends this again after it selects
+     * the tag again.
+     */
+    private byte[] tagFile;
     private long generation;
     private FixtureException fixtureError;
     /** The owner key a fixture set, so later fixtures can sign the owner's proofs; null when the card has none or a key the bridge does not hold. */
@@ -106,6 +114,7 @@ final class SimCard {
             throw new IllegalStateException("SELECT after install answered " + Hex.format(resp) + ", not a 2.x applet");
         }
         selected = AID_HEX;
+        tagFile = null;
         fixtureError = null;
         owner = null;
     }
@@ -127,9 +136,24 @@ final class SimCard {
         }
         byte[] resolved = resolveSelect(command);
         byte[] resp = sim.transmitCommand(resolved);
+        boolean ok = resp.length >= 2 && sw(resp) == SW_OK;
+        // any SELECT by name that is answered selects an instance afresh, the tag's chosen file with it
+        if (ok && isSelectByName(resolved)) tagFile = null;
         String instance = instanceSelectedBy(resolved);
-        if (instance != null && resp.length >= 2 && sw(resp) == SW_OK) selected = instance;
+        if (instance != null && ok) selected = instance;
+        if (ok && TAG_HEX.equals(selected) && isSelectFile(resolved)) tagFile = resolved.clone();
         return resp;
+    }
+
+    /** A SELECT by name (P1 04) in the interindustry class, which the runtime takes as selecting an instance. */
+    static boolean isSelectByName(byte[] command) {
+        return command.length >= 4 && (command[0] & 0x80) == 0 && command[1] == (byte) 0xA4 && command[2] == 0x04;
+    }
+
+    /** The tag's SELECT of a file (Tag.chooseFile): CLA 00, INS A4, P1 00, P2 0C. */
+    static boolean isSelectFile(byte[] command) {
+        return command.length >= 4 && command[0] == 0x00 && command[1] == (byte) 0xA4 && command[2] == 0x00
+                && command[3] == 0x0C;
     }
 
     /** The instance a SELECT by name for the first occurrence names by its whole AID, or null for any other command. */
@@ -153,8 +177,9 @@ final class SimCard {
     /**
      * Run the bridge's reads on the card's applet. When the app has another instance selected, SELECT the card's
      * applet for them and the app's instance again after, so the app's next command reaches what it did before. The
-     * card's applet was deselected when the app left it, so its session (CLEAR_ON_DESELECT) is already gone; this
-     * changes nothing the app could see.
+     * card's applet was deselected when the app left it, so its session (CLEAR_ON_DESELECT) is already gone. The opener
+     * keeps nothing across a selection. The tag keeps the file chosen, which a new selection clears, so when the app had
+     * chosen one its SELECT of that file is sent again after the tag's: the app's next READ BINARY reads the same file.
      */
     private <T> T onTheCard(java.util.function.Supplier<T> reads) {
         if (AID_HEX.equals(selected)) return reads.get();
@@ -171,6 +196,7 @@ final class SimCard {
             again[4] = (byte) aid.length;
             System.arraycopy(aid, 0, again, 5, aid.length);
             raw(again);
+            if (TAG_HEX.equals(back) && tagFile != null) raw(tagFile);
         }
     }
 
@@ -304,6 +330,7 @@ final class SimCard {
             }
             expect("SELECT", SELECT, SW_OK);
             selected = AID_HEX;
+            tagFile = null;
         } catch (FixtureException e) {
             fixtureError = e;
             throw e;
