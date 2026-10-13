@@ -84,11 +84,14 @@ jobs:
           echo "::error::cardsim did not answer /state within 30 s"
           exit 1
 
-      # The 2.0 AID (F0 CASHUCARD) answers version 02 00.
+      # The card's applet's whole AID (F0 CASHUCARD 01) answers version 02 00. The package AID alone
+      # reaches the opener, as on a J3R180 (D25): 9000 with no version.
       - name: Smoke-test SELECT over HTTP
         run: |
-          curl -sf -X POST localhost:9876/apdu -d '{"hex":"00A404000AF0434153485543415244"}' \
+          curl -sf -X POST localhost:9876/apdu -d '{"hex":"00A404000BF043415348554341524401"}' \
             | grep -q '"hex":"02009000"'
+          curl -sf -X POST localhost:9876/apdu -d '{"hex":"00A404000AF0434153485543415244"}' \
+            | grep -q '"hex":"9000"'
 
       # The integration cases in client.test.cjs run only with CARDSIM_URL;
       # the e2e-tools job runs the same file without it and gets the pure

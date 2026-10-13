@@ -1,6 +1,6 @@
 # cardsim: the 2.0 card over loopback HTTP
 
-The real `CashuApplet` (protocol 2.0, AID `F0 43 41 53 48 55 43 41 52 44`) in
+The real `CashuApplet` (protocol 2.0, AID `F0 43 41 53 48 55 43 41 52 44 01`) in
 jCardSim, behind a small HTTP API. flash-pos and flash-mobile run it in their e2e
 jobs, pinned by `CASHU_JAVACARD_REF`. **This file is that contract**: the four
 routes, the `/fixture` schema, the `/state` fields and the Node client. A change to
@@ -51,7 +51,9 @@ not expect is **500** `{"error"}`. The card is kept as it was.
 - **Sessions.** `SELECT` starts one. The PIN-verified flag, the owner's nonce and
   the owner's load grant are cleared on deselect, so a re-`SELECT` drops them as a
   new NFC tap does. There is no "tap" route: a transport sends `SELECT` on each tap.
-  `/state` never sends `SELECT`. `/fixture` ends with one.
+  `/state` sends no `SELECT` while the card's applet is selected (with the opener
+  or the tag selected, see "SELECT the applet's whole AID" below). `/fixture` ends
+  with one.
 - **Old cards.** An old AID (0.x `D2 76 00 00 85 01 02`, or Foxy's 1.x
   `F0 46 4F 58 59 …`) through jCardSim answers `6E00` or `6999`, where a real card's
   runtime answers `6A82`. Treat any `SELECT` answer that is not `02xx 9000` as
@@ -187,8 +189,26 @@ curl -s -X POST localhost:9876/fixture -d '{
   "limits": {"day": 5000, "payment": 1000, "allowance": 250}
 }' | jq '{balance, rollBudget, counts}'
 # {"balance": 32, "rollBudget": 7, "counts": {"unspent": 1, "spent": 0, "empty": 127}}
-curl -s -X POST localhost:9876/apdu -d '{"hex":"00A404000AF0434153485543415244"}'
+curl -s -X POST localhost:9876/apdu -d '{"hex":"00A404000BF043415348554341524401"}'
 # {"hex":"02009000","sw":"9000"}
+```
+
+**SELECT the applet's whole AID** (`F0 CASHUCARD 01`, [D25](../../docs/DECISIONS.md#d25)).
+The bridge installs the opener first, then the card's applet, then the tag, as a
+chip has them, and answers a SELECT by a partial name the way the J3R180 does: it
+reaches the first instance made whose AID begins with the name. So the package AID
+`F0 CASHUCARD` alone reaches the opener, which answers `9000` with no version and
+`6D00` to every command after. jCardSim on its own gives a partial name to the
+lowest matching AID in sort order (the card's applet), so the bridge resolves the
+name itself before jCardSim sees it (`SimCard.resolveSelect`); a whole AID, a name
+that begins no instance and a "next occurrence" SELECT pass through unchanged.
+`GET /state` and `/fixture` read the card's applet wherever the app left the
+selection: `/state` puts the app's selection back after its reads, and a fixture
+ends with the card's applet selected, as before.
+
+```bash
+curl -s -X POST localhost:9876/apdu -d '{"hex":"00A404000AF0434153485543415244"}'
+# {"hex":"9000","sw":"9000"}   the opener: no version
 ```
 
 The same in Node, minting at a real mint with a SIG_ALL swap, is

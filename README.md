@@ -74,7 +74,9 @@ communication, or any check of the DLEQ proofs it keeps. Those live on the host 
 see [D3](docs/DECISIONS.md#d3).
 
 **AID:** package `F0 43 41 53 48 55 43 41 52 44` ("CASHUCARD"), applet `…44 01`.
-`SELECT` answers `02 00`. A card on the 0.x AID (`D2 76 00 00 85 01 02`) or Foxy's
+A reader selects the applet's whole AID, `F0 43 41 53 48 55 43 41 52 44 01`, and
+`SELECT` answers `02 00`; the package AID alone reaches the opener on a chip
+([D25](docs/DECISIONS.md#d25)). A card on the 0.x AID (`D2 76 00 00 85 01 02`) or Foxy's
 1.x AID answers nothing to it: it needs an update.
 
 ## Supported hardware
@@ -131,7 +133,7 @@ on a simulator or emulator without a reader:
 ```bash
 tools/cardsim/cardsim.sh                               # from source, via Maven
 mvn -B -f tools/cardsim/pom.xml package && java -jar tools/cardsim/target/cardsim.jar
-curl -s -X POST localhost:9876/apdu -d '{"hex":"00A404000AF0434153485543415244"}'   # {"hex":"02009000","sw":"9000"}
+curl -s -X POST localhost:9876/apdu -d '{"hex":"00A404000BF043415348554341524401"}'   # {"hex":"02009000","sw":"9000"}
 ```
 
 Endpoints: `POST /apdu` (raw bytes in, data‖SW out, never retried), `POST /reset`

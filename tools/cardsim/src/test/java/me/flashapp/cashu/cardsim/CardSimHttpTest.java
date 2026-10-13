@@ -53,14 +53,30 @@ class CardSimHttpTest {
     }
 
     @Test
-    @DisplayName("POST /apdu round-trips a SELECT by the CASHUCARD AID: 02 00")
+    @DisplayName("POST /apdu round-trips a SELECT by the card's applet's whole AID, F0 CASHUCARD 01: 02 00")
     void apduRoundTrip() throws Exception {
-        HttpResponse<String> r = post("/apdu", "{\"hex\":\"00A404000AF0434153485543415244\"}");
+        HttpResponse<String> r = post("/apdu", "{\"hex\":\"00A404000BF043415348554341524401\"}");
         assertEquals(200, r.statusCode());
         assertEquals("application/json", r.headers().firstValue("Content-Type").orElse(""));
         JsonObject o = json(r);
         assertEquals("02009000", o.get("hex").getAsString());
         assertEquals("9000", o.get("sw").getAsString());
+    }
+
+    @Test
+    @DisplayName("POST /apdu with a SELECT by the package AID alone reaches the opener, as on the chip: 9000, no body, then 6D00")
+    void packageAidReachesTheOpener() throws Exception {
+        JsonObject o = json(post("/apdu", "{\"hex\":\"00A404000AF0434153485543415244\"}"));
+        assertEquals("9000", o.get("hex").getAsString());
+        assertEquals("9000", o.get("sw").getAsString());
+        assertEquals("6D00", json(post("/apdu", "{\"hex\":\"B001020000\"}")).get("sw").getAsString());
+        // GET /state still reads the card, and leaves the opener selected for the app
+        HttpResponse<String> state = get("/state");
+        assertEquals(200, state.statusCode(), state.body());
+        assertEquals("2.0", json(state).get("version").getAsString());
+        assertEquals("6D00", json(post("/apdu", "{\"hex\":\"B001020000\"}")).get("sw").getAsString());
+        assertEquals("02009000", json(post("/apdu", "{\"hex\":\"00A404000BF043415348554341524401\"}")).get("hex").getAsString());
+        assertEquals("9000", json(post("/apdu", "{\"hex\":\"B001020000\"}")).get("sw").getAsString());
     }
 
     @Test

@@ -40,10 +40,12 @@ import java.util.function.Supplier;
  * fields and lower case for the slot fields of {@code /state}.
  *
  * <dl>
- *   <dt>{@code POST /apdu}  {"hex": "00A404000AF0434153485543415244"}</dt>
+ *   <dt>{@code POST /apdu}  {"hex": "00A404000BF043415348554341524401"}</dt>
  *   <dd>{@code 200 {"hex": "02009000", "sw": "9000"}} — the applet's answer,
  *       data‖SW. A non-9000 status word is still a 200: the transport worked,
- *       the card refused. 400 for bad JSON or bad hex. <b>Never retried</b> by
+ *       the card refused. 400 for bad JSON or bad hex. A SELECT by the package
+ *       AID alone reaches the opener, as on a chip ({@code "9000"}, no version;
+ *       SimCard's class comment, DECISIONS D25). <b>Never retried</b> by
  *       this server or by client.cjs: a replayed LOAD_PROOF burns a slot, and a
  *       replayed SPEND_ALL_SIGN of a payment already signed answers 6985 (the
  *       signature is had again with SPEND_ALL_AGAIN).</dd>
@@ -95,7 +97,10 @@ import java.util.function.Supplier;
  * SELECT starts a session. The applet's PIN-verified flag, the owner's nonce
  * and the owner's load grant are CLEAR_ON_DESELECT transients, so a re-SELECT
  * drops them the way a new NFC tap does; the fake transport sends SELECT on
- * every tap and there is no "tap" endpoint. {@code /state} never sends SELECT.
+ * every tap and there is no "tap" endpoint. {@code /state} sends no SELECT while
+ * the card's applet is selected; with another instance selected (the opener, by
+ * the package AID) it selects the card's applet for its reads and the app's
+ * instance again after (SimCard's class comment).
  *
  * <h2>The other bridge</h2>
  *

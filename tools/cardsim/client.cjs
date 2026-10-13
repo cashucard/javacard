@@ -96,9 +96,12 @@ const SW = Object.freeze({
   CRYPTO_ERROR: 0x6f00,
 })
 
-// The package AID, "CASHUCARD" after F0 (D19), then the applet's whole AID as a fallback (cardctl.select).
+// The card's applet's whole AID first, then the package AID, "CASHUCARD" after F0 (D19), as a fallback
+// (cardctl.select, D25). On a chip the package AID alone is a partial name and reaches the opener, made first,
+// which answers 9000 with no version; the bridge does the same, so a 9000 without a version falls through.
 const PACKAGE_AID = Buffer.from("F0434153485543415244", "hex")
 const APPLET_AID = Buffer.from("F043415348554341524401", "hex")
+const SELECT_AIDS = Object.freeze([APPLET_AID, PACKAGE_AID])
 // Withdrawn: a card that answers these, or does not answer the 2.0 AID, needs an update.
 const OLD_AIDS = Object.freeze({ upstream0x: Buffer.from("D2760000850102", "hex"), foxy1x: Buffer.from("F0464F585943415244", "hex") })
 
@@ -313,7 +316,7 @@ function limitValue({ day, payment, allowance, rollBudget } = {}) {
 
 /** Pure encoders: the bytes each command puts on the wire. Argument checks throw before any transport. */
 const encode = Object.freeze({
-  select: (aid = PACKAGE_AID) => Buffer.concat([Buffer.from([0x00, 0xa4, 0x04, 0x00, aid.length]), aid]),
+  select: (aid = APPLET_AID) => Buffer.concat([Buffer.from([0x00, 0xa4, 0x04, 0x00, aid.length]), aid]),
   getInfo: (p1 = 2) => apdu(INS.GET_INFO, p1, 0, null, 0x00),
   getPubkey: () => apdu(INS.GET_PUBKEY, 0, 0, null, 0x21),
   getBalance: () => apdu(INS.GET_BALANCE, 0, 0, null, 0x04),
@@ -587,17 +590,24 @@ class CardSim {
 
   // ── the card ──────────────────────────────────────────────────────────
 
-  /** SELECT by the package AID, then the applet's whole AID. Returns {major, minor}. */
+  /**
+   * SELECT by the applet's whole AID, then the package AID (D25). Returns {major, minor}. A 9000 with no version is
+   * another applet of the package (the opener, which a partial name reaches) and counts as no answer. Throws the last
+   * CardError, or an Error naming the AID that answered 9000 with no version when that was the last answer.
+   */
   async select() {
     let last
-    for (const aid of [PACKAGE_AID, APPLET_AID]) {
+    for (const aid of SELECT_AIDS) {
+      let v
       try {
-        const v = await this.send(encode.select(aid), "SELECT")
-        return { major: v[0], minor: v[1] }
+        v = await this.send(encode.select(aid), "SELECT")
       } catch (e) {
         if (!(e instanceof CardError)) throw e
         last = e
+        continue
       }
+      if (v.length >= 2) return { major: v[0], minor: v[1] }
+      last = new Error(`SELECT ${aid.toString("hex").toUpperCase()} answered 9000 with no version: not the card's applet`)
     }
     throw last
   }
@@ -665,7 +675,7 @@ class CardSim {
 }
 
 const constants = Object.freeze({
-  CLA, INS, SW, PACKAGE_AID, APPLET_AID, OLD_AIDS, VERSION, MAX_PROOFS, PROOF_SIZE, DLEQ_LEN, HEADER_LEN, OUTPUT_LEN,
+  CLA, INS, SW, PACKAGE_AID, APPLET_AID, SELECT_AIDS, OLD_AIDS, VERSION, MAX_PROOFS, PROOF_SIZE, DLEQ_LEN, HEADER_LEN, OUTPUT_LEN,
   LOCK_CONFIRM_BYTE, MAX_SLOT_AMOUNT, PIN_MIN_LEN, PIN_MAX_LEN, ROLL_BUDGET_DEFAULT, ROLL_BUDGET_MOST, STATUS_NAMES,
   PIN_STATE_NAMES, LABEL, TEST_OWNER_PRIVATE,
 })
