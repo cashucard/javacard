@@ -181,6 +181,27 @@ class SimCardTest {
     }
 
     @Test
+    @DisplayName("a fixture refused partway through, applied with a file chosen on the tag, leaves the card's applet selected, and state() keeps it so")
+    void refusedFixtureWithTheTagSelected() throws FixtureException {
+        apply("{\"pin\":\"1234\"}");
+        assertEquals(0x9000, SimCard.sw(card.transmit(SELECT_TAG)));
+        assertEquals("9000", Hex.format(card.transmit(SELECT_NDEF_FILE)));
+        assertEquals(SimCard.TAG_HEX, card.selected());
+
+        FixtureException e = assertThrows(FixtureException.class, () -> apply("{\"pin\":\"9999\"}"), "VERIFY_PIN of another PIN");
+        assertEquals("VERIFY_PIN", e.step);
+        assertEquals(0x63C2, e.sw);
+        assertEquals(SimCard.AID_HEX, card.selected(), "the fixture's SELECT moved the selection to the card's applet");
+
+        byte[] before = card.transmit(READ_NDEF);
+        assertEquals("6E00", Hex.format(before), "READ BINARY reaches the card's applet, which has no such class");
+        assertEquals(SimCard.AID_HEX, card.selected());
+        card.state();
+        assertArrayEquals(before, card.transmit(READ_NDEF), "state() does not move the app back onto the tag");
+        assertEquals(SimCard.AID_HEX, card.selected());
+    }
+
+    @Test
     @DisplayName("a fixture applied with the opener selected sets the card up and leaves the card's applet selected")
     void fixtureWithTheOpenerSelected() throws FixtureException {
         assertEquals("9000", Hex.format(card.transmit(SimCard.SELECT_PACKAGE)));

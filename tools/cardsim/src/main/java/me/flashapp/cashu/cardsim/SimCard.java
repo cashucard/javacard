@@ -31,7 +31,8 @@ import java.util.Arrays;
  * command reaches what it reached before. Selecting the tag again clears the file it had chosen (CLEAR_ON_DESELECT), so
  * when the app had chosen one the bridge sends the app's last SELECT of that file again as well, and a READ BINARY after
  * {@code /state} reads what it would have read without it. {@link #applyFixture} selects the card's applet first in
- * that case; it ends with a SELECT of the card's applet either way.
+ * that case, and records the selection as soon as that SELECT is answered, so a fixture refused partway through leaves
+ * the bridge knowing the card's applet is selected; a fixture that succeeds ends with a SELECT of the card's applet.
  *
  * <p><b>Thread confinement.</b> jCardSim keeps the active runtime in a {@code ThreadLocal}
  * ({@code SimulatorSystem.currentRuntime}), set when the simulator is constructed. Every call on this object — the
@@ -273,7 +274,13 @@ final class SimCard {
         generation++;
         fixtureError = null;
         try {
-            if (!AID_HEX.equals(selected)) expect("SELECT", SELECT, SW_OK);
+            if (!AID_HEX.equals(selected)) {
+                expect("SELECT", SELECT, SW_OK);
+                // the selection moved here, whatever a later step does: a refused step must not leave the bridge
+                // thinking the app still has the opener or the tag (and its chosen file) selected
+                selected = AID_HEX;
+                tagFile = null;
+            }
             if (f.pin != null) {
                 // the PIN is set on a card that has none, and on a card that has one it is the PIN to verify
                 if (data(raw(GET_INFO), "GET_INFO")[7] == 0) expect("SET_PIN", apdu(0x41, 0, 0, f.pin, -1), SW_OK);
