@@ -75,20 +75,99 @@ CARD_ANSWER = (bytes([4, 1, 0]) + (5000).to_bytes(4, "big") + bytes(33) + bytes.
 
 
 # ── selection ─────────────────────────────────────────────────────────────────
-def test_select_uses_the_10_byte_cashucard_package_aid():
+def test_select_uses_the_11_byte_applet_aid_first():
+    # D25: a reader selects the card's applet by its whole AID, F0 CASHUCARD 01.
     card = make_card([(b"\x02\x00", 0x9000)])
     assert card.select() == b"\x02\x00"
-    assert card.connection.last == bytes.fromhex("00A404000AF0434153485543415244"), \
-        card.connection.last.hex()
+    assert card.connection.sent == [bytes.fromhex("00A404000BF043415348554341524401")], \
+        [a.hex() for a in card.connection.sent]
     assert cardctl.PACKAGE_AID == b"\xF0" + b"CASHUCARD"
+    assert cardctl.APPLET_AID == cardctl.PACKAGE_AID + b"\x01"
+    assert cardctl.SELECT_AIDS == (cardctl.APPLET_AID, cardctl.PACKAGE_AID)
 
 
-def test_select_falls_back_to_the_11_byte_applet_aid():
-    # First SELECT fails (6A82), second must use the applet's whole AID.
+def test_select_falls_back_to_the_10_byte_package_aid():
+    # The whole AID fails (6A82); the second SELECT is by the package AID.
     card = make_card([(b"", 0x6A82), (b"\x02\x00", 0x9000)])
-    card.select()
+    assert card.select() == b"\x02\x00"
     assert len(card.connection.sent) == 2
-    assert card.connection.sent[1] == bytes.fromhex("00A404000BF043415348554341524401")
+    assert card.connection.sent[1] == bytes.fromhex("00A404000AF0434153485543415244")
+
+
+class ChipConnection(FakeConnection):
+    """A J3R180 as v2.0.0-rc.1 left it (ENG-681): the opener (F0 CASHUCARD 4D)
+    instantiated first, then the card's applet (F0 CASHUCARD 01). The chip
+    gives a partial name to the first instance whose AID begins with it, so a
+    SELECT by the package AID reaches the opener: 9000 with no body, and 6D00
+    to the next command. The whole AID reaches the card's applet: 02 00."""
+
+    OPENER = bytes.fromhex("F04341534855434152444D")
+    CARD = bytes.fromhex("F043415348554341524401")
+    INSTANCES = (OPENER, CARD)  # in the order the chip made them
+
+    def __init__(self):
+        super().__init__()
+        self.selected = None
+
+    def transmit(self, apdu):
+        apdu = bytes(apdu)
+        self.sent.append(apdu)
+        if apdu[:4] == bytes.fromhex("00A40400"):
+            name = apdu[5:5 + apdu[4]]
+            match = next((aid for aid in self.INSTANCES if aid.startswith(name)), None)
+            if match is None:
+                return [], 0x6A, 0x82
+            self.selected = match
+            return ([0x02, 0x00] if match == self.CARD else []), 0x90, 0x00
+        if self.selected == self.CARD and apdu[:2] == bytes([cardctl.CLA, cardctl.INS_GET_INFO]):
+            return list(INFO_43), 0x90, 0x00
+        return [], 0x6D, 0x00
+
+
+def chip_card():
+    card = make_card()
+    card.connection = ChipConnection()
+    return card
+
+
+def test_on_the_chip_select_reaches_the_card_applet_not_the_opener():
+    """The ENG-681 failure: selecting the package AID first took the opener's
+    9000 for the card, and every command after it answered 6D00. Selecting the
+    whole AID first answers 02 00, and GET_INFO then reaches the card."""
+    card = chip_card()
+    assert card.select() == b"\x02\x00"
+    assert card.connection.selected == ChipConnection.CARD
+    assert card.connection.sent == [bytes.fromhex("00A404000BF043415348554341524401")]
+    assert card.get_info()["version"] == "2.0"
+
+    # The order this replaced, against the same chip: the package AID's 9000
+    # was returned as the version, and the opener was what answered next.
+    old = chip_card()
+    old_order_version = old.transmit(bytes.fromhex("00A404000AF0434153485543415244"), "SELECT")
+    assert old_order_version == b"" and old.connection.selected == ChipConnection.OPENER
+    try:
+        old.get_info()
+    except cardctl.CardError as exc:
+        assert exc.sw == 0x6D00, exc
+    else:
+        raise AssertionError("the opener answered GET_INFO")
+
+
+def test_a_package_aid_9000_with_no_version_falls_through():
+    # The whole AID is not answered (6A82) and the package AID reaches the opener
+    # (9000, no body): no 2.0 applet answered, so cardctl says the card needs an update
+    # rather than returning an empty version.
+    card = make_card([(b"", 0x6A82), (b"", 0x9000)])
+    try:
+        card.select()
+    except SystemExit as exc:
+        assert "no version" in str(exc) and "update" in str(exc), str(exc)
+    else:
+        raise AssertionError("a 9000 with no version was taken for the card's applet")
+    # and an empty 9000 to the whole AID is passed over too, for the package AID's answer
+    card = make_card([(b"", 0x9000), (b"\x02\x00", 0x9000)])
+    assert card.select() == b"\x02\x00"
+    assert [a[4] for a in card.connection.sent] == [11, 10]
 
 
 def test_select_names_a_card_that_needs_an_update():

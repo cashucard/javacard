@@ -47,11 +47,15 @@ import p256
 
 # ── Applet identity ───────────────────────────────────────────────────────────
 # Protocol 2.0 (DECISIONS D19): the 10-byte package AID, "CASHUCARD" after the
-# proprietary RID byte F0. SELECT matches it as a prefix of the applet's
-# instance AID (…44 01); the whole instance AID is the fallback for a card or
-# reader that declines a partial name.
+# proprietary RID byte F0, and the card's applet under it and 01. A reader
+# selects the applet's whole AID (D25). On a chip a SELECT by the package AID
+# alone is a partial name, and the chip gives it to the first instance whose
+# AID begins with it: the opener (…44 4D), instantiated first, which answers
+# 9000 with no version and 6D00 to everything after. The package AID is only
+# the fallback, and a 9000 to it without a version is not the card's applet.
 PACKAGE_AID = bytes.fromhex("F0434153485543415244")
 APPLET_AID = PACKAGE_AID + b"\x01"
+SELECT_AIDS = (APPLET_AID, PACKAGE_AID)
 
 # The 0.x applet's AID, under the NFC Forum's RID. Only the 0.x card file
 # tools (`dump`, `load-file`) select it; every other command speaks 2.0.
@@ -350,15 +354,26 @@ class Card:
 
     # ── selection ─────────────────────────────────────────────────────────────
     def select(self, legacy: bool = False) -> bytes:
-        """SELECT by AID. Returns the 2-byte applet version."""
+        """SELECT by AID. Returns the 2-byte applet version.
+
+        2.0 selects the applet's whole AID first (D25). An answer of 9000
+        with no version is some other applet of the package (the opener, on
+        a chip that gave it a partial name) and counts as no answer: the next
+        AID is tried, as after an error.
+        """
         self.legacy = legacy
-        aids = (LEGACY_PACKAGE_AID, LEGACY_APPLET_AID) if legacy else (PACKAGE_AID, APPLET_AID)
+        aids = (LEGACY_PACKAGE_AID, LEGACY_APPLET_AID) if legacy else SELECT_AIDS
+        last: object = None
         for aid in aids:
             apdu = bytes([0x00, 0xA4, 0x04, 0x00, len(aid)]) + aid
             try:
-                return self.transmit(apdu, "SELECT")
+                version = self.transmit(apdu, "SELECT")
             except CardError as exc:
                 last = exc
+                continue
+            if len(version) >= 2:
+                return version
+            last = f"SELECT {_hex(aid)} answered 9000 with no version (not the card's applet)"
         if legacy:
             raise SystemExit(f"SELECT of the 0.x applet failed: {last}\n"
                              "This card has no 0.x applet; card files are 0.x-only (spec/CARD-FILE.md).")

@@ -205,15 +205,17 @@ def test_select_application_matches_the_apdu_the_driver_sends():
     data = re.search(r"^\| Data \| `([0-9A-Fa-f ]+)`", body, re.M)
     assert data, "SELECT APPLICATION's table has no parsable Data row"
     aid = bytes.fromhex(data.group(1).replace(" ", ""))
-    assert aid == cardctl.PACKAGE_AID, f"spec's AID {aid.hex()} != cardctl's {cardctl.PACKAGE_AID.hex()}"
-    assert fields["Lc"] == len(cardctl.PACKAGE_AID)
+    # D25: the table's AID is the applet's whole AID, the one cardctl selects first
+    assert aid == cardctl.APPLET_AID, f"spec's AID {aid.hex()} != cardctl's {cardctl.APPLET_AID.hex()}"
+    assert fields["Lc"] == len(cardctl.APPLET_AID)
     card = make_card([(b"\x02\x00", 0x9000)])
     card.select()
     documented = bytes([fields["CLA"], fields["INS"], fields["P1"], fields["P2"], fields["Lc"]]) + aid
-    assert card.connection.last == documented, f"spec {documented.hex()} != cardctl {card.connection.last.hex()}"
-    # the fallback cardctl tries, and the withdrawn AIDs, are documented
+    assert card.connection.sent == [documented], f"spec {documented.hex()} != cardctl {card.connection.last.hex()}"
+    # the fallback cardctl tries, the opener a partial name reaches, and the withdrawn AIDs, are documented
     spans = _hex_spans(body)
-    assert cardctl.APPLET_AID in spans, "the applet's whole AID (the fallback) is not documented"
+    assert cardctl.PACKAGE_AID in spans, "the package AID (the fallback) is not documented"
+    assert cardctl.PACKAGE_AID + b"\x4D" in spans, "the opener, which a SELECT by the package AID reaches on a chip, is not named"
     assert cardctl.LEGACY_PACKAGE_AID in spans, "the 0.x AID is not named as withdrawn"
     # and the build installs the card's applet under that AID
     build = (ROOT / "applet" / "build.xml").read_text(encoding="utf-8")

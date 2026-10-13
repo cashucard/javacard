@@ -26,18 +26,23 @@ and this file differ, this file is the 2.0 wire.
 | INS | `A4` |
 | P1 | `04` (select by name) |
 | P2 | `00` |
-| Lc | `0A` |
-| Data | `F0 43 41 53 48 55 43 41 52 44` (the package AID, "CASHUCARD" after the proprietary RID byte `F0`) |
+| Lc | `0B` |
+| Data | `F0 43 41 53 48 55 43 41 52 44 01` (the card's applet: the package AID, "CASHUCARD" after the proprietary RID byte `F0`, and `01`) |
 | Le | `00` |
 
 **Response:** 2 bytes, the applet version: `02 00`.
 
-The applet's instance AID is the package AID and `01`:
-`F0 43 41 53 48 55 43 41 52 44 01`. A reader that declines a partial name selects
-it whole. The package also holds the opener (`F0 43 41 53 48 55 43 41 52 44 4D`,
-installed first: [`HARDWARE_DEPLOYMENT.md`](../docs/HARDWARE_DEPLOYMENT.md)) and
-the NFC tag (class `F0 43 41 53 48 55 43 41 52 44 54`, instantiated under the NFC
-Forum's own `D2 76 00 00 85 01 01`).
+A reader selects the applet's whole AID ([D25](../docs/DECISIONS.md#d25)). The
+package AID `F0 43 41 53 48 55 43 41 52 44` begins two instance AIDs, the
+opener's (`F0 43 41 53 48 55 43 41 52 44 4D`) and the card's applet's (`…44 01`),
+and the NFC tag's class AID (`F0 43 41 53 48 55 43 41 52 44 54`; the tag is
+instantiated under the NFC Forum's own `D2 76 00 00 85 01 01`). On a chip, a SELECT by that partial name
+reaches the first instance made whose AID begins with it, and the opener is made
+first ([`HARDWARE_DEPLOYMENT.md`](../docs/HARDWARE_DEPLOYMENT.md)): it answers
+`90 00` with no version, and `6D 00` to every command after. A reader that has
+only the package AID to go on, or that gets `6A82` to the whole AID, may try it,
+but takes a `90 00` without the two version bytes as no answer from the card's
+applet.
 
 A card that answers `6A82` (the card's runtime: no such application) to this
 name is not a 2.0 card. The 0.x applet answered `D2 76 00 00 85 01 02` and Foxy's
