@@ -60,9 +60,10 @@ The build then takes the Descriptor component out (`tools/stripcap.py`: the chip
 keeps nothing of it) and checks the load file's size against what the J3R180 has
 been seen to install (`tools/refcheck.py`, from
 [FOXY-CARD-HARDWARE.md](FOXY-CARD-HARDWARE.md)). The 2.1 build is **20,068 bytes**
-by refcheck's measure (100 past a multiple of 256), a size not yet tried on the
-chip: try it with the opener first before a card is handed out, and add the answer
-to refcheck's table ([D26](DECISIONS.md#d26)). The 2.0 build was 20,060 bytes;
+by refcheck's measure (100 past a multiple of 256). It installed on a J3R180 with
+the opener first, in the three steps below, on 2026-10-14, and refcheck's table has
+it as a size that installs ([D26](DECISIONS.md#d26),
+[the report](HARDWARE_TEST_REPORT_2026-10-14.j3r180-2.1.md)). The 2.0 build was 20,060 bytes;
 v2.0.0-rc.1 (sha256 `59f66673…`) installed on the J3R180 with the opener first, at
 20,057 bytes as the install counted the load file, and refcheck's table has it as a
 size that installs ([D25](DECISIONS.md#d25)).
