@@ -5,8 +5,8 @@
 > reasons. On the 2.0 wire a reader SELECTs the applet's whole AID
 > `F0 43 41 53 48 55 43 41 52 44 01` ([D25](DECISIONS.md#d25)), not
 > `F0 FOXYCARD 01`; the package AID alone reaches the opener on a chip. That
-> `SELECT` answers `02 00`, every `FoxyCard/…` label is
-> `CashuCard/…`, and D20 to D24 add to it (the rollover budget and `REFRESH`, the
+> `SELECT` answers `02 01`, every `FoxyCard/…` label is
+> `CashuCard/…`, and D20 to D26 add to it (the rollover budget and `REFRESH`, the
 > anchored owner, and the fixes). Where this and [`spec/APDU.md`](../spec/APDU.md) differ, the
 > spec is the 2.0 wire.
 

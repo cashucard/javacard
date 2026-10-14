@@ -36,7 +36,7 @@ listed in [`docs/FOR-LNFLASH.md`](../docs/FOR-LNFLASH.md) section 3.
 - **Card**: an ISO 14443-4 NFC device running the applet, selected by the
   applet's whole AID `F0 43 41 53 48 55 43 41 52 44 01` (the package AID
   `F0 43 41 53 48 55 43 41 52 44`, "CASHUCARD" after the proprietary RID byte
-  `F0`, and `01`), version `02 00`. A SELECT by the package AID alone is a
+  `F0`, and `01`), version `02 01` (any `02 xx` is this protocol). A SELECT by the package AID alone is a
   partial name, and a chip gives it to the package's first instance, the opener,
   which answers `90 00` with no version (see [AID assignment](#aid-assignment)).
 - **Card key** (`P_card`): a secp256k1 key pair made on the card at install. The
@@ -177,6 +177,9 @@ could be renewed by a terminal that keeps the card and brings a header a day. In
 sent by the holder's phone whenever it is online. The no-PIN allowance begins
 again at a roll only if a PIN or an owner's proof has armed it since it last did.
 A card whose owner was set with an anchor header never runs on an unset clock.
+Only a payment that moves value (the pieces less the card's own change above 0)
+rolls the day or spends a roll (2.1); a `SET_LIMIT` without the budget's byte
+leaves the budget as it is.
 
 ---
 

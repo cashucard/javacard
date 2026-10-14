@@ -4,7 +4,7 @@ Each entry records a call that was made, what was rejected, and why. If you are
 about to change one of these, read the entry first — most were made against a
 real alternative, and several were made *after* getting it wrong once.
 
-Anchors are stable (`#d1` … `#d25`); other docs link to them. D15 and D16
+Anchors are stable (`#d1` … `#d26`); other docs link to them. D15 and D16
 are superseded by the 2.0 merge ([D18](#d18)) and kept for the record.
 
 ---
@@ -733,6 +733,10 @@ page a 2.0 card's tag opens is a product decision left open.
 
 ## <a id="d20"></a>D20 — The clock walk is bounded: a rollover budget, REFRESH, an armed allowance, an anchored owner
 
+*Amended by [D26](#d26) (2.1): only a payment that moves value rolls the day, and
+a `SET_LIMIT` without the budget's byte leaves the budget as it is. The text
+below is 2.0's.*
+
 **Found (Foxy's reply, question 3; our shelved 0.7 plan, its decision 9),
 fixed (ENG-673, fix 4a).** In 1.20 the day's window rolls whenever a payment
 finds the card's clock a day past the window's start, and the clock is any
@@ -750,7 +754,8 @@ spent its first day on trust.
   where it is and what was signed for in it still counts. Default 7, 1 to 30,
   set by a thirteenth byte on the owner's `SET_LIMIT` (`34`); a form without
   it (4, 8 or 12 bytes, and the PIN form `33`) sets the budget back to 7, as
-  the architect's decision 2 (ENG-673) has it. The first window a card begins (a limit or an
+  the architect's decision 2 (ENG-673) has it (2.0; since 2.1 it leaves the
+  budget as it is, [D26](#d26)). The first window a card begins (a limit or an
   allowance set before any header, or an allowance set alone) is a beginning,
   not a roll. A terminal with the PIN that walks the clock now gets the found
   day and the budget's days, and no more until the owner's phone has seen the
@@ -802,11 +807,13 @@ it sends puts the budget back to 7, in both directions:
 
 - an owner's budget of 1 to 6 is loosened to 7, so a terminal with the PIN
   gets more days' limits out of a walk until a phone that sends the byte sets
-  it again (`ClockWalkTest.aFormWithoutTheByteSetsTheBudgetBackToSeven`);
+  it again (2.0's `ClockWalkTest.aFormWithoutTheByteSetsTheBudgetBackToSeven`;
+  2.1 holds the opposite, `aFormWithoutTheByteLeavesABudgetOfTwo`, [D26](#d26));
 - an owner's budget of 8 to 30 is tightened to 7, so a holder the owner gave
   a longer budget because they are offline for weeks finds the day's limit
   stops renewing after a week, not a month, and has to come online and tap
-  the card sooner (`ClockWalkTest.aFormWithoutTheByteTightensABudgetOfThirtyToSeven`).
+  the card sooner (2.0's `ClockWalkTest.aFormWithoutTheByteTightensABudgetOfThirtyToSeven`;
+  2.1: `aFormWithoutTheByteLeavesABudgetOfThirty`).
 
 The second takes spending away from a holder. Foxy reviews both in the PR.
 
@@ -1011,6 +1018,111 @@ resolves a partial name itself, to the first instance installed whose AID begins
 with it (`SimCard.resolveSelect`), so an app's e2e run against the bridge meets
 the opener where a chip would put it. The applet's own suites install the card's
 applet alone, where either SELECT reaches it.
+
+---
+
+## <a id="d26"></a>D26: Only a payment that moves value turns the day; a SET_LIMIT without the budget's byte leaves it (amends D20)
+
+**Found (Mike Greff's review of 2.0, ENG-699), fixed in 2.1.** Each finding was
+first written as a test that failed on 2.0; the names are `ClockWalkTest`'s.
+
+1. **A payment of nothing spent a roll.** In 2.0 `SPEND_ALL_SIGN` rolled the day
+   whenever the day was over and the budget lasted, whatever the payment came
+   to. A payment whose change (`SPEND_ALL_CHANGE`) is the whole of its pieces
+   leaves the card nothing poorer (`allNet` is 0), so it is within any
+   allowance: on a card with a PIN and an allowance a reader with no PIN signs
+   it, and on a card with no PIN anyone does. Seven taps of it along seven real
+   headers spent the default budget of 7, and the owner then had one day's
+   limit until the next `REFRESH`. Failing on 2.0:
+   `aPaymentThatMovesNoValueRollsNothing` (a roll on the first day),
+   `onACardWithNoPinAPaymentOfNothingRollsNothing` (two rolls of a budget of 2),
+   `aPaymentOfNothingBeginsNoWindow` (it began the first window). One part of
+   the finding does not hold: a card with a PIN and no allowance refuses such a
+   payment from a reader with no PIN (`6A94`), as it refuses every payment
+   without the PIN, so on that card it never rolled
+   (`withNoAllowanceAReaderWithNoPinPaysNothingAtAll`, passing on 2.0 and 2.1).
+2. **A form without the budget's byte reset the budget.** D20 had every
+   4-, 8- or 12-byte `SET_LIMIT` (and the PIN's form) set it back to 7. Failing
+   on 2.0: `aFormWithoutTheByteLeavesTheBudget`,
+   `aFormWithoutTheByteLeavesABudgetOfTwo`, `aFormWithoutTheByteLeavesABudgetOfThirty`.
+3. **A budget set under the rolls already spent.** It stops the day at once and
+   until `REFRESH`, which empties the rolls. 2.0 already did this (`windowRolls`
+   compares the rolls to the budget as it is now); the finding is held by a
+   test that passes on both, `aBudgetUnderTheRollsSpentStopsTheDay`.
+
+**Decided:**
+
+- **What spends a roll.** A `SPEND_ALL_SIGN` that signs and commits, whose
+  `allNet` (the pieces named at `SPEND_ALL_BEGIN` less the card's own change)
+  is above 0, on a card with a daily limit or an allowance, that finds the day
+  over (`now` at least 86,400 seconds past the window's start) and its rolls
+  under the budget. A window not yet begun is begun by the same payment, and
+  that is no roll. Nothing else spends one: `SET_HEADER`, `REFRESH` and the
+  anchored `SET_OWNER` move the clock, `TELL_TIME` is a note, every `GET_*`
+  only reads, `VERIFY_PIN` and an owner's proof arm the allowance, and a
+  payment refused (`6A94`, `6A8F`, or given up before its signature) throws
+  before its transaction (`nothingButAPaymentRolls`). A payment of nothing is
+  signed as before and counted, as nothing, in the window as it stands.
+- **One test, read three times.** The value check is in `windowRolls`, which
+  the day's limit (`requireUnderLimits`), the allowance
+  (`requireAllowanceOrPin`) and the commit all read. Were they to disagree, a
+  payment would have been judged against a new day and written into the old
+  one, and the day's count would have gone to nothing with no roll. The roll,
+  the day's count and the burn stay in the payment's one transaction
+  ([D23](#d23)); no write moved, and `SlotWriteOrderTest` holds the list.
+- **The budget's byte, absent, leaves the budget.** A wallet that sets a limit
+  and does not know the byte neither loosens nor tightens what the owner
+  chose. The rolls are not touched by any `SET_LIMIT`.
+
+**What still rolls with no PIN.** A payment of value within the allowance: one
+sat a day from a reader with no PIN rolls the day as any payment does
+(`aPaymentOfOneSatWithNoPinStillRolls`: seven rolls for seven sats). That walk
+costs the reader a sat a roll from an allowance that does not begin again until
+a PIN or the owner's proof arms it, so it is bounded by the allowance in sats;
+the card's log has every one of them, and `REFRESH` ends it. **Rejected:** a
+payment with no PIN rolls only when the allowance is armed. It closes this as
+well, and it costs the holder: a payment with the PIN spends the arming at its
+roll, so the next day's first payment with no PIN would be judged against the
+day before's count, and refused for the daily limit after a full day. An owner
+who sets an allowance accepts the sat-a-roll walk until that is decided.
+
+**The version is 2.1.** `CashuApplet`'s rule: the version moves with every
+wire-visible change of behaviour. Two answers change for the same commands
+(`GET_CARD`'s byte 76 after a payment of nothing, its byte 77 after a short
+`SET_LIMIT`), and v2.0.0 was released with the old ones. Nothing on the wire
+is added or moved: no instruction, length or byte of `GET_INFO` or `GET_CARD`
+has a new meaning. No card is in a holder's hands (the owner's statement), so
+there is nothing to migrate; the minor is how a reader, and `cardctl
+selftest`, tell a bench card left on v2.0.0 from the fixed build. flash-pos,
+flash-mobile and Foxy's wallet check the major alone, and take `02 01` as they
+took `02 00`. `cardctl selftest` passes 2.1 and later 2.x, and a 2.0 card is
+swept and reinstalled. The CAP is `cashu-javacard-2.1.0.cap`.
+
+**The size.** The load file is 20,068 bytes by refcheck's measure (100 past a
+multiple of 256), 8 more than 2.0's 20,060. Refcheck accepts it: no size near
+it has failed. It has not been tried on the J3R180; it is, with the opener
+first, before a 2.1 card is handed out, and the answer goes into refcheck's
+table. If the chip refuses it, `sizeTheFile` moves the build to a size that
+installs.
+
+**The vectors.** `spec/vectors/transcript.json` is recorded again. It selected
+the package AID, which on a chip reaches the opener ([D25](#d25)); every
+`SELECT` in it is now by the whole AID `F0 43 41 53 48 55 43 41 52 44 01`, and
+it answers `02 01`. It ends with the rollover on the wire: an anchored
+`SET_OWNER` (145 bytes, refused first for an anchor without the work), budgets
+of 0 and 31 refused, the thirteen-byte `SET_LIMIT` with a budget of 1, the
+four-byte form leaving it, a payment of nothing that rolls nothing, a roll
+that spends the budget, a day that then stands (`6A8F`), `REFRESH` by the old
+owner's key refused and by the owner's taken, and the day rolling again.
+`owner.json` gains the thirteen-byte limit, `CashuCard/refresh` over a header
+and the anchored `SET_OWNER`'s 145 bytes. `secret.json` and `headers.json` do
+not depend on the AID or the rollover and are as they were.
+
+**Cost accepted.** A `SET_LIMIT` says what the budget is afterwards only when
+it carries the byte, which the architect's decision 2 had wanted of every one.
+flash-mobile, Foxy's wallet, `cardctl --budget` and the bridge's fixtures send
+the byte every time; a wallet that does not sends the limits it means and
+leaves the budget to the owner.
 
 ---
 

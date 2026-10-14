@@ -166,7 +166,9 @@ with no PIN, and refresh the card. It can never spend.
 
 **Rollover budget** — how many times the day's window may roll between the
 owner's `REFRESH`es (default 7, 1 to 30): the bound on a terminal that walks the
-card's clock with real block headers ([D20](DECISIONS.md#d20)).
+card's clock with real block headers ([D20](DECISIONS.md#d20)). Only a payment
+that moves value spends a roll, and a `SET_LIMIT` without the budget's byte leaves
+the budget as it is ([D26](DECISIONS.md#d26)).
 
 **PUK** — 0.6's provisioning unblock key ([D16](DECISIONS.md#d16)), superseded in
 2.0 by the owner's `CHANGE_PIN`.

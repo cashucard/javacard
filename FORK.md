@@ -3,8 +3,8 @@
 > **Merged into cashu-javacard as protocol 2.0 (ENG-673, [DECISIONS D18](docs/DECISIONS.md#d18)).** This
 > document is Foxy's, as it stood at software 1.20, kept for its design and its
 > reasons. On the 2.0 wire the AID is `F0 43 41 53 48 55 43 41 52 44` (not
-> `F0 FOXYCARD`), `SELECT` answers `02 00`, every `FoxyCard/…` label is
-> `CashuCard/…`, and D20 to D24 add to it (the rollover budget and `REFRESH`, the
+> `F0 FOXYCARD`), `SELECT` answers `02 01`, every `FoxyCard/…` label is
+> `CashuCard/…`, and D20 to D26 add to it (the rollover budget and `REFRESH`, the
 > anchored owner, and the fixes). Where this and [`spec/APDU.md`](spec/APDU.md) differ, the
 > spec is the 2.0 wire.
 

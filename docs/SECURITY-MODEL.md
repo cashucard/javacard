@@ -228,7 +228,8 @@ leaves an empty place with a record beside it, which nothing serves.
 - The clock walk (2.0, D20): along real mainnet headers, a terminal with the PIN
   gets the found day and the rollover budget's days and no more; `REFRESH` fills the
   budget; the no-PIN allowance renews once per arming; an anchored owner's clock is
-  never 0
+  never 0; a payment that moves no value rolls nothing, and a `SET_LIMIT` without
+  the budget's byte leaves the budget (2.1, D26)
 - The field multiplies against `BigInteger` on operands full of zero bytes, and a
   source scan for secret-dependent branches in the two multiplies (2.0, D21); the
   reductions' branches are listed as open (item 5), and a scan holds the list to
@@ -269,8 +270,8 @@ An earlier card, a J3R452 on applet 0.1, ran the read and sign path on
   between two applets of one package
 - A blocked PIN on any build: neither ENG-615 nor its 0.3 fix (the
   blocked-state gate and the failed-check session rule) has run on a card
-- Anything of 2.0 itself: the build has not been installed on a card, and its
-  load file is a size the J3R180 has not been tried at
+- The 2.1 build on a card: its load file is a size the J3R180 has not been
+  tried at (the 2.0 build installed, [D25](DECISIONS.md#d25))
 - `REFRESH`, the anchored `SET_OWNER` and the rollover budget on a card
 - `LOCK_CARD`, deliberately not run on a card holding value
 - EEPROM wear and lifetime
