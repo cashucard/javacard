@@ -97,6 +97,8 @@ AID alone then reached the opener and not the card's applet: the chip gives a
 partial name to the first instance made whose AID begins with it, so readers
 select the card's applet by its whole AID (DECISIONS D25). `cardctl selftest`
 passed 12 of 12, and `AUTH` took 833 to 854 ms a signature on an ACR122U.
+2.1 (ENG-699, DECISIONS D26) is 20,068 bytes by refcheck's measure (100 past a
+multiple of 256), eight more than 2.0: a size not yet tried on the chip.
 
 What the software does: `CashuApplet.sizeTheFile` is never called and is in
 the package for its length alone, about six bytes a line, so that a build

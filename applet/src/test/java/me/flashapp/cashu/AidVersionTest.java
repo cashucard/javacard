@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
 
 /**
  * The shared protocol's identity (D19): the package AID F0 43 41 53 48 55 43 41 52 44 ("CASHUCARD" after a
- * proprietary F0), the applet's instance AID the same and 01, version 2.0 in SELECT and GET_INFO, and the labels
+ * proprietary F0), the applet's instance AID the same and 01, version 2.1 (D26) in SELECT and GET_INFO, and the labels
  * "CashuCard/...". The two AIDs that went before, cashu-javacard 0.x's D2 76 00 00 85 01 02 (which was under the NFC
  * Forum's RID, never ours) and Foxy's F0 FOXYCARD, select nothing: that 6A82 is what a phone reads as "this card needs
  * an update".
@@ -58,26 +58,26 @@ class AidVersionTest {
     }
 
     @Test
-    @DisplayName("SELECT by the package AID and by the applet's whole AID both answer 02 00")
+    @DisplayName("SELECT by the package AID and by the applet's whole AID both answer 02 01")
     void selectAnswersTwoZero() {
         ResponseAPDU byPackage = select(PACKAGE);
         assertEquals(CashuAppletTest.SW_OK, byPackage.getSW());
-        assertArrayEquals(new byte[] { 0x02, 0x00 }, byPackage.getData(), "2.0 by the package's name");
+        assertArrayEquals(new byte[] { 0x02, 0x01 }, byPackage.getData(), "2.1 by the package's name");
         ResponseAPDU whole = select(APPLET);
         assertEquals(CashuAppletTest.SW_OK, whole.getSW());
-        assertArrayEquals(new byte[] { 0x02, 0x00 }, whole.getData(), "2.0 by the applet's");
+        assertArrayEquals(new byte[] { 0x02, 0x01 }, whole.getData(), "2.1 by the applet's");
     }
 
     @Test
-    @DisplayName("GET_INFO's first two bytes are the version, 02 00")
+    @DisplayName("GET_INFO's first two bytes are the version, 02 01")
     void getInfoSaysTwoZero() {
         assertEquals(CashuAppletTest.SW_OK, select(PACKAGE).getSW());
         ResponseAPDU info = sim.transmitCommand(new CommandAPDU(CashuAppletTest.CLA, CashuAppletTest.INS_GET_INFO, 0, 0, 256));
         assertEquals(CashuAppletTest.SW_OK, info.getSW());
         assertEquals(2, info.getData()[0], "major 2: the shared protocol");
-        assertEquals(0, info.getData()[1], "minor 0");
+        assertEquals(1, info.getData()[1], "minor 1: D26's rollover rules (ENG-699)");
         assertEquals(2, CashuApplet.VERSION_MAJOR);
-        assertEquals(0, CashuApplet.VERSION_MINOR);
+        assertEquals(1, CashuApplet.VERSION_MINOR);
     }
 
     @Test

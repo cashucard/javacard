@@ -1,9 +1,10 @@
-# APDU Command Reference — Cashu card protocol 2.0
+# APDU Command Reference — Cashu card protocol 2.1
 
-The wire of the shared Cashu card protocol, version 2.0: the applet in this
+The wire of the shared Cashu card protocol, version 2.1: the applet in this
 repository (`applet/src/main/java/me/flashapp/cashu/CashuApplet.java`), which is
 the Foxy wallet project's software 1.20 with a neutral identity and the fixes in
-[`docs/DECISIONS.md`](../docs/DECISIONS.md) D18 to D24. Version 2.0 is not
+[`docs/DECISIONS.md`](../docs/DECISIONS.md) D18 to D26. 2.1 has 2.0's commands and
+bytes; what moves the day and the rollover budget is D26's (below). Version 2.x is not
 compatible with the 0.x applet that this file used to describe, nor with Foxy's
 1.x: it has an AID of its own, so that neither can be mistaken for it.
 
@@ -30,7 +31,9 @@ and this file differ, this file is the 2.0 wire.
 | Data | `F0 43 41 53 48 55 43 41 52 44 01` (the card's applet: the package AID, "CASHUCARD" after the proprietary RID byte `F0`, and `01`) |
 | Le | `00` |
 
-**Response:** 2 bytes, the applet version: `02 00`.
+**Response:** 2 bytes, the applet version: `02 01`. A reader takes any `02 xx`
+as the shared protocol; `02 00` is the v2.0.0 release, whose rollover rules D26
+replaced.
 
 A reader selects the applet's whole AID ([D25](../docs/DECISIONS.md#d25)). The
 package AID `F0 43 41 53 48 55 43 41 52 44` begins two instance AIDs, the
@@ -557,7 +560,7 @@ design; `6700` for a bad length. Never touches the limits or the clock. The firs
 
 The PIN form, for an open card (no owner, nothing unspent, the PIN set and
 verified). `6A91` on an owned card; `6A8D` with anything unspent; `6700` for
-another length.
+another length. It has no rollover budget, and leaves the card's as it is (D26).
 
 ### SET_LIMIT (0x34)
 
@@ -576,7 +579,7 @@ The owner's form; no PIN, any funds. The value:
 | 0–3 | daily limit | sats; 0 is none. A new number begins a window at `now` |
 | 4–7 | payment limit | (8, 12 or 13 bytes) sats; a payment over it waits, by the card's own work, for every limit's worth past the first |
 | 8–11 | no-PIN allowance | (12 or 13 bytes) sats a day signed for without the PIN; `6985` for a number on a card with no PIN |
-| 12 | rollover budget | (13 bytes) 1 to 30: how often the window may roll between the owner's `REFRESH`es; `6A80` outside that. Absent (4, 8 or 12 bytes), the budget is set back to its default, 7 |
+| 12 | rollover budget | (13 bytes) 1 to 30: how often the window may roll between the owner's `REFRESH`es; `6A80` outside that. Absent (4, 8 or 12 bytes), the budget is left as it is (D26; 2.0 set it back to 7). A budget under the rolls already spent stops the day until `REFRESH` |
 
 `6A90`, `6A91`; `6986` locked; `6700` for a length other than 4, 8, 12 or 13.
 
@@ -814,6 +817,18 @@ The first window a card begins (its start still 0) is not a roll. At a roll the
 no-PIN count begins again only if the allowance is armed, by a `VERIFY_PIN` or an
 owner's proof since it last did, and the roll spends the arming. `GET_CARD` bytes
 76 to 78 say the rolls, the budget and the arming.
+
+**Only a payment that moves value rolls (2.1, D26).** A roll is spent only by a
+`SPEND_ALL_SIGN` that is signed and commits with something leaving the card for
+good: the pieces less the card's own change (`SPEND_ALL_CHANGE`) above 0. A payment
+whose change is the whole of its pieces is signed, as ever, and counted as nothing
+in the window as it stands: it begins no day, first or later, and spends no roll.
+No other command spends one: a header (`SET_HEADER`, `REFRESH`, the anchor),
+`TELL_TIME`, a read, a PIN, an owner's grant, or a payment refused (`6A94`, `6A8F`,
+or given up before its signature). A window also begins, as in 2.0, at the first
+header after a limit set with no clock and at a `SET_LIMIT` that changes the day's
+number; neither is a roll. The roll, the day's count and the payment's burn are one
+transaction.
 
 ---
 

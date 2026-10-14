@@ -1,7 +1,7 @@
 # Hardware Deployment Guide
 
-GlobalPlatform packaging and deployment for the Cashu card applet, protocol 2.0
-([D18](DECISIONS.md#d18), [D19](DECISIONS.md#d19)).
+GlobalPlatform packaging and deployment for the Cashu card applet, protocol 2.1
+([D18](DECISIONS.md#d18), [D19](DECISIONS.md#d19), [D26](DECISIONS.md#d26)).
 
 ---
 
@@ -52,18 +52,20 @@ cd cashu-javacard/applet
 ant cap
 ant cap -Djc.sdk=/path/to/jc305u4_kit   # explicit form
 
-# Output: target/cashu-javacard-2.0.0.cap, one file with three applets in it: the opener, the card's, and the NFC tag
-ls -lh target/cashu-javacard-2.0.0.cap
+# Output: target/cashu-javacard-2.1.0.cap, one file with three applets in it: the opener, the card's, and the NFC tag
+ls -lh target/cashu-javacard-2.1.0.cap
 ```
 
 The build then takes the Descriptor component out (`tools/stripcap.py`: the chip
 keeps nothing of it) and checks the load file's size against what the J3R180 has
 been seen to install (`tools/refcheck.py`, from
-[FOXY-CARD-HARDWARE.md](FOXY-CARD-HARDWARE.md)). The 2.0 build is **20,060 bytes**
-by refcheck's measure (92 past a multiple of 256). It was a size not yet tried on the
-chip until ENG-681: v2.0.0-rc.1 (this CAP, sha256 `59f66673…`) installed on the
-J3R180 with the opener first, at 20,057 bytes as the install counted the load file,
-and refcheck's table now has it as a size that installs ([D25](DECISIONS.md#d25)).
+[FOXY-CARD-HARDWARE.md](FOXY-CARD-HARDWARE.md)). The 2.1 build is **20,068 bytes**
+by refcheck's measure (100 past a multiple of 256), a size not yet tried on the
+chip: try it with the opener first before a card is handed out, and add the answer
+to refcheck's table ([D26](DECISIONS.md#d26)). The 2.0 build was 20,060 bytes;
+v2.0.0-rc.1 (sha256 `59f66673…`) installed on the J3R180 with the opener first, at
+20,057 bytes as the install counted the load file, and refcheck's table has it as a
+size that installs ([D25](DECISIONS.md#d25)).
 If a later build lands on a size the chip refuses, move it with
 `CashuApplet.sizeTheFile` to a size known to install and add the answer to
 refcheck's table.
@@ -102,9 +104,9 @@ gp --list
 
 ## Install
 
-The CAP tracked in this repo is **applet version 2.0**, sha256
-`59f66673a0dda7993c2e2e432e5e3e3d8203cf09c7edb3a4f79e5016a90db787`
-(`applet/target/cashu-javacard-2.0.0.cap`). A CAP you build yourself hashes
+The CAP tracked in this repo is **applet version 2.1**, sha256
+`f27d92ba99581f4e42abda0efc038b2c31128f9b405bcec6de52f6a12ae4c7e5`
+(`applet/target/cashu-javacard-2.1.0.cap`). A CAP you build yourself hashes
 differently even from identical source, because the converter writes a creation
 timestamp into `META-INF/MANIFEST.MF`. Every other entry is byte-identical when
 built with JDK 17 and the kit CI pins (`jc305u4_kit` at `oracle_javacard_sdks`
@@ -113,20 +115,20 @@ installing your own build, compare every entry except `META-INF/MANIFEST.MF`
 against the tracked CAP:
 
 ```bash
-# From applet/, after `ant cap` has overwritten target/cashu-javacard-2.0.0.cap
-git show HEAD:applet/target/cashu-javacard-2.0.0.cap > /tmp/tracked.cap
+# From applet/, after `ant cap` has overwritten target/cashu-javacard-2.1.0.cap
+git show HEAD:applet/target/cashu-javacard-2.1.0.cap > /tmp/tracked.cap
 rm -rf /tmp/cap-tracked /tmp/cap-built
 unzip -q /tmp/tracked.cap -d /tmp/cap-tracked
-unzip -q target/cashu-javacard-2.0.0.cap -d /tmp/cap-built
+unzip -q target/cashu-javacard-2.1.0.cap -d /tmp/cap-built
 diff -r -x MANIFEST.MF /tmp/cap-tracked /tmp/cap-built && echo "same CAP as the tracked one"
 ```
 
 Any output from `diff` means the two CAPs differ; do not install. After
-installing, `SELECT` must answer `02 00` for the card's applet's whole AID (below).
+installing, `SELECT` must answer `02 01` for the card's applet's whole AID (below).
 
 ```bash
 # Load the file and instantiate the opener (gp installs one applet of a file at a time)...
-gp --install target/cashu-javacard-2.0.0.cap --applet F04341534855434152444D
+gp --install target/cashu-javacard-2.1.0.cap --applet F04341534855434152444D
 # ...then create the card's applet from the loaded package
 gp --create F043415348554341524401 --package F0434153485543415244 --applet F043415348554341524401
 # ...then the NFC tag, under the NFC Forum's own name as its instance AID
@@ -173,8 +175,8 @@ holder's phone (flash-mobile's "Set up this card").
 # SELECT the card's applet by its whole AID, F0 CASHUCARD 01
 gp --apdu 00A404000BF043415348554341524401
 
-# Response: 0200 9000  (applet version 2.0 + SW_OK = applet responding)
-# A card that answers 6A82 has no 2.0 applet: it is a 0.x or Foxy 1.x card and needs an update.
+# Response: 0201 9000  (applet version 2.1 + SW_OK = applet responding)
+# A card that answers 6A82 has no 2.x applet: it is a 0.x or Foxy 1.x card and needs an update.
 # Do not SELECT the package AID alone (00A404000AF0434153485543415244): on the chip that
 # partial name reaches the opener, instantiated first, which answers 9000 with no version
 # and 6D00 to every command after it (D25).
@@ -182,8 +184,8 @@ gp --apdu 00A404000BF043415348554341524401
 # GET_INFO (INS 0x01)
 gp --apdu B0010000
 
-# Response: 02 00 80 00 00 80 FF 00 04 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
-#   v2.0 | 128 slots | 0 unspent | 0 spent | 128 empty | caps=FF | PIN none | format 4 | 3 tries | not locked | no record | no limit | no owner | no clock | no window | 0 spent | no change grant
+# Response: 02 01 80 00 00 80 FF 00 04 03 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+#   v2.1 | 128 slots | 0 unspent | 0 spent | 128 empty | caps=FF | PIN none | format 4 | 3 tries | not locked | no record | no limit | no owner | no clock | no window | 0 spent | no change grant
 # SW: 9000
 
 # GET_PUBKEY (INS 0x10)
@@ -192,7 +194,8 @@ gp --apdu B0100000
 # Response: 33-byte compressed secp256k1 public key + SW 9000
 ```
 
-`cardctl selftest` passes a card answering `02 00` and fails any other. cardctl
+`cardctl selftest` passes a card answering `02 01` (or a later 2.x) and fails any
+other: a card on v2.0.0 is swept and reinstalled ([D26](DECISIONS.md#d26)). cardctl
 selects the whole AID first and takes a `9000` without a version as no answer.
 
 **On the chip (ENG-681, 2026-10-13).** v2.0.0-rc.1 installed on the J3R180 in the
@@ -215,7 +218,7 @@ gp --delete F04341534855434152444D   # the opener
 gp --delete F0434153485543415244     # the package
 
 # Re-install: the opener first, the tag last
-gp --install target/cashu-javacard-2.0.0.cap --applet F04341534855434152444D
+gp --install target/cashu-javacard-2.1.0.cap --applet F04341534855434152444D
 gp --create F043415348554341524401 --package F0434153485543415244 --applet F043415348554341524401
 gp --create D2760000850101 --package F0434153485543415244 --applet F043415348554341524454
 ```

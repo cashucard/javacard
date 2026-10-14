@@ -87,6 +87,7 @@ class CashuAppletTest {
     static final int RESET_CONFIRM         = 0xAD;
     /** SET_TAG (1.19): the owner's proof switches the card's NFC tag off (P1 = 1) or on (P1 = 0). */
     static final byte INS_SET_TAG          = (byte) 0x52;
+    static final byte INS_REFRESH          = (byte) 0x53;
 
     static final int SW_OK                  = 0x9000;
     static final int SW_WRONG_LENGTH        = 0x6700;
@@ -219,7 +220,8 @@ class CashuAppletTest {
     static final byte[] NO_REFUND = new byte[33];
 
     static final String L_PIN = "CashuCard/change-pin", L_LIMIT = "CashuCard/set-limit", L_LOCK = "CashuCard/lock",
-        L_LOAD = "CashuCard/load", L_OWNER = "CashuCard/set-owner", L_CARD = "CashuCard/set-card", L_RESET = "CashuCard/reset", L_TAG = "CashuCard/tag";
+        L_LOAD = "CashuCard/load", L_OWNER = "CashuCard/set-owner", L_CARD = "CashuCard/set-card", L_RESET = "CashuCard/reset", L_TAG = "CashuCard/tag",
+        L_REFRESH = "CashuCard/refresh";
     static final String[] OWNER_LABELS = { L_PIN, L_LIMIT, L_LOCK, L_LOAD, L_OWNER, L_CARD, L_RESET, L_TAG };
 
     /** A runtime that hands the test its applet, so what a command cannot reach can be set or read directly. */
@@ -335,6 +337,10 @@ class CashuAppletTest {
     }
     private static CommandAPDU setOwnerCommand(byte[] proof, Key newOwner) {
         return new CommandAPDU(CLA, INS_SET_OWNER, 0, 0, ownerData(proof, newOwner.pub));
+    }
+    /** REFRESH (0x53, D20): the owner's proof over a block header, then the header; answers the card's clock. */
+    private static CommandAPDU refreshCommand(byte[] proof, byte[] header) {
+        return new CommandAPDU(CLA, INS_REFRESH, 0, 0, ownerData(proof, header), 4);
     }
     private static CommandAPDU setCardOpenCommand(byte[] record) {
         return new CommandAPDU(CLA, INS_SET_CARD, 0, 0, record);
@@ -784,7 +790,7 @@ class CashuAppletTest {
         // too (today its 1.x card's ten bytes, F0 FOXYCARD 01); on 2.0 the whole AID is these eleven
         ResponseAPDU whole = transmit(new CommandAPDU(0x00, 0xA4, 0x04, 0x00, hexToBytes(AID_HEX), 256));
         assertEquals(SW_OK, whole.getSW());
-        assertArrayEquals(new byte[] { 0x02, 0x00 }, whole.getData(), "the same answer either way: version 2.0");
+        assertArrayEquals(new byte[] { 0x02, 0x01 }, whole.getData(), "the same answer either way: version 2.1");
         assertEquals(SW_OK, sw(new CommandAPDU(CLA, INS_GET_INFO, 0, 0, 256)), "and its instructions follow");
     }
 
@@ -793,17 +799,17 @@ class CashuAppletTest {
     void testSelect() {
         ResponseAPDU resp = transmit(new CommandAPDU(0x00, 0xA4, 0x04, 0x00, hexToBytes(AID_STR)));
         assertEquals(SW_OK, resp.getSW());
-        assertArrayEquals(new byte[] { 0x02, 0x00 }, resp.getData(), "version 2.0: the shared protocol (D18), Foxy's 1.20 under the neutral AID with the fixes of D19 to D24 (1.20: the card keeps the mint's proof with each piece, which it does not check and a phone reads back (1.19: the card answers as an NFC tag, which its owner switches off and on; 1.18: four waits for each limit's worth over the limit past the first; 1.17: a card can be reset; 1.16: the PIN is optional, and a card with one has a no-PIN allowance; 1.15 was the clock: the time written in the newest Bitcoin block header the card has taken)");
+        assertArrayEquals(new byte[] { 0x02, 0x01 }, resp.getData(), "version 2.1: the shared protocol (D18), Foxy's 1.20 under the neutral AID with the fixes of D19 to D24, and D26's rollover rules (1.20: the card keeps the mint's proof with each piece, which it does not check and a phone reads back (1.19: the card answers as an NFC tag, which its owner switches off and on; 1.18: four waits for each limit's worth over the limit past the first; 1.17: a card can be reset; 1.16: the PIN is optional, and a card with one has a no-PIN allowance; 1.15 was the clock: the time written in the newest Bitcoin block header the card has taken)");
         assertNotEquals(SW_OK, sw(new CommandAPDU(0x00, 0xA4, 0x04, 0x00, hexToBytes(UPSTREAM_AID))),
             "an upstream reader must not find this applet under upstream's AID: the wire is not the same");
     }
 
     @Test
-    @DisplayName("GET_INFO on a new card: 30 bytes: version 2.0, 128 empty slots, no PIN, three tries, format 4, capabilities FF, no record, no limit, no owner, no block header seen, no change due")
+    @DisplayName("GET_INFO on a new card: 30 bytes: version 2.1, 128 empty slots, no PIN, three tries, format 4, capabilities FF, no record, no limit, no owner, no block header seen, no change due")
     void testInfoFresh() {
         byte[] d = info();
         assertEquals(30, d.length);
-        assertEquals(2, d[0]); assertEquals(0, d[1]);
+        assertEquals(2, d[0]); assertEquals(1, d[1]);
         assertEquals(MAX_PROOFS, d[2] & 0xFF);
         assertEquals(0, d[3]); assertEquals(0, d[4]);
         assertEquals(MAX_PROOFS, d[5] & 0xFF);
@@ -2717,7 +2723,7 @@ class CashuAppletTest {
                 // and the answer says what the marked places make it say
                 byte[] d = torn.getData();
                 if (name.equals("SELECT")) {
-                    assertArrayEquals(new byte[] { 0x02, 0x00 }, d, what);
+                    assertArrayEquals(new byte[] { 0x02, 0x01 }, d, what);
                 } else if (name.equals("GET_INFO")) {
                     assertEquals(others, d[3] & 0xFF, what + ": unspent");
                     assertEquals(n + others, d[4] & 0xFF, what + ": spent");
@@ -3830,7 +3836,7 @@ class CashuAppletTest {
         assertEquals(CashuApplet.CARD_BITS_OFFSET + 4 + 32 + 29, CashuApplet.CARD_NOW_OFFSET, "bits, hash and 29 zeros take the 65 bytes the time key had, and the clock is where it was");
         assertEquals(185, CashuApplet.CARD_NOW_OFFSET);
         assertEquals(0x02, CashuApplet.VERSION_MAJOR);
-        assertEquals(0x00, CashuApplet.VERSION_MINOR);
+        assertEquals(0x01, CashuApplet.VERSION_MINOR);
         assertEquals(212, CashuApplet.CARD_RECORD_LEN, "and the record is the length it was");
         assertEquals(212, field("cardRecord").length);
     }
@@ -6995,7 +7001,7 @@ class CashuAppletTest {
         readyWithLimit(0);
         byte[] more = infoTap();
         assertEquals(2, more[0]);
-        assertEquals(0, more[1], "version 2.0");
+        assertEquals(1, more[1], "version 2.1");
         assertEquals((byte) 0xFF, more[6], "capabilities FF: the limit on one payment is waited for, not refused, the 1.6 forms are there, so are 128 places with the short listing, a payment burned outside its transaction, and the PIN taken sealed");
         assertEquals(SW_OK, setLimits(1000, 100));
         assertEquals(100, paymentLimit());
@@ -8142,15 +8148,22 @@ class CashuAppletTest {
         StringBuilder out = new StringBuilder("{\n");
         out.append(" \"curve\": \"P-256 (secp256r1)\",\n \"signature\": \"ECDSA, SHA-256, DER\",\n");
         out.append(" \"ownerKey\": \"").append(toHex(OWNER.pub)).append("\",\n \"proofs\": [\n");
-        String[] labels = { L_PIN, L_LIMIT, L_LOAD, L_CARD, L_OWNER, L_LOCK, L_LIMIT, L_RESET, L_TAG };
-        byte[][] values = { NEW_PIN, u32(5000), new byte[0], record(MINT, REFUND), OTHER_OWNER.pub, new byte[0], concat(u32(5000), u32(100), u32(50)), new byte[0], new byte[] { 1 } };
+        // 2.0 (D20): the limit's label over thirteen bytes (the rollover budget last), REFRESH's over a block header, and
+        // SET_OWNER's over a key and the header that anchors the clock (145 bytes)
+        byte[] tip = hexToBytes(TIP);
+        byte[] thirteen = concat(u32(5000), u32(100), u32(50), new byte[] { 7 });
+        String[] labels = { L_PIN, L_LIMIT, L_LOAD, L_CARD, L_OWNER, L_LOCK, L_LIMIT, L_RESET, L_TAG, L_LIMIT, L_REFRESH, L_OWNER };
+        byte[][] values = { NEW_PIN, u32(5000), new byte[0], record(MINT, REFUND), OTHER_OWNER.pub, new byte[0], concat(u32(5000), u32(100), u32(50)), new byte[0], new byte[] { 1 },
+            thirteen, tip, concat(OTHER_OWNER.pub, tip) };
         for (int i = 0; i < labels.length; i++) {
             simulator = freshCard();
             ready();
             byte[] n = nonceBytes();
             byte[] proof = ownerProof(labels[i], OWNER, n, values[i]);
             CommandAPDU[] commands = { changePinCommand(proof, NEW_PIN), setLimitCommand(proof, 5000), allowLoadCommand(proof),
-                setCardCommand(proof, values[3]), setOwnerCommand(proof, OTHER_OWNER), lockCommand(proof), setLimits3Command(proof, 5000, 100, 50), resetCommand(proof), setTagCommand(proof, 1) };
+                setCardCommand(proof, values[3]), setOwnerCommand(proof, OTHER_OWNER), lockCommand(proof), setLimits3Command(proof, 5000, 100, 50), resetCommand(proof), setTagCommand(proof, 1),
+                new CommandAPDU(CLA, INS_SET_LIMIT_OWNER, 0, 0, ownerData(proof, thirteen)), refreshCommand(proof, tip),
+                new CommandAPDU(CLA, INS_SET_OWNER, 0, 0, ownerData(proof, values[11])) };
             assertEquals(SW_OK, sw(commands[i]), labels[i] + " is the owner's proof, to the card");
             out.append("  {\"label\": \"").append(labels[i]).append("\", \"nonce\": \"").append(toHex(n))
                .append("\", \"value\": \"").append(toHex(values[i])).append("\", \"signature\": \"").append(toHex(proof))
@@ -9589,7 +9602,8 @@ class CashuAppletTest {
         byte[] formerKey = FORMER_TIME_KEY.pub.clone(); formerKey[0] = 0x02;      // anything at all: since 1.15 the card does not read the 65 bytes where the time key was
         byte[] lyingRecord = record("0123456789", REFUND); lyingRecord[99] = 20;
         byte[] notPoint = buildProof(KEYSET, 16, 5); notPoint[44] = 0x04;
-        CommandAPDU select = new CommandAPDU(0x00, 0xA4, 0x04, 0x00, hexToBytes(AID_STR));
+        // the card's applet by its whole AID, as a reader selects it (D25): on a chip the package's ten bytes reach the opener
+        CommandAPDU select = new CommandAPDU(0x00, 0xA4, 0x04, 0x00, hexToBytes(AID_HEX));
         CommandAPDU info = new CommandAPDU(CLA, INS_GET_INFO, 0, 0, 256);
         CommandAPDU getCard = new CommandAPDU(CLA, INS_GET_CARD, 0, 0, 256);
         CommandAPDU verifyOk = new CommandAPDU(CLA, INS_VERIFY_PIN, 0, 0, TEST_PIN);
@@ -10316,6 +10330,78 @@ class CashuAppletTest {
         say(out, "a piece loads", "exact", SW_OK, new CommandAPDU(CLA, INS_LOAD_PROOF, 0, 0, buildProof(KEYSET, 16, 1), 1));
         assertArrayEquals(none, say(out, "and has no mint's proof of the last owner's to be given (1.20)", "exact", SW_OK, getDleqCommand(0, 255)).getData());
         owner(out, "RESET_CARD with a piece on the card", SW_CARD_IN_USE, L_RESET, OTHER_OWNER, new byte[0], p -> resetCommand(p));
+
+        /* 2.0 (D20, D26): the rollover budget, REFRESH and the anchored owner, on the wire. The card is emptied, its owner gives it to
+         * a new owner with an anchor (SET_OWNER, 145 bytes: the key and a block header), the limits are set in thirteen bytes with a
+         * rollover budget of 1, and the four-byte form then leaves that budget as it is (D26). A payment that moves no value (the
+         * piece all back as the card's own change) rolls nothing (D26); a payment of value rolls the day until the budget is spent,
+         * the day then stands, and REFRESH lets it roll again. The headers are the network's, a day apart (spec/vectors/headers.json).
+         * GET_CARD's bytes 76 to 78 say the rolls, the budget and the arming throughout. */
+        ClockWalkTest.readTheHeaders();
+        byte[] h9 = ClockWalkTest.H.get(9), h10 = ClockWalkTest.H.get(10), h11 = ClockWalkTest.H.get(11);
+        assertTrue(ClockWalkTest.T.get(9) > TIP_TIME, "the anchor is newer than the card's clock");
+        sayReset(out, "taken away and put back: the rollover budget (2.0, D20 and D26)");
+        say(out, "select", "exact", SW_OK, select);
+        CommandAPDU verifyNew = new CommandAPDU(CLA, INS_VERIFY_PIN, 0, 0, NEW_PIN);
+        say(out, "the PIN", "exact", SW_OK, verifyNew);
+        sayPay(out, "the piece paid, to empty the card for a new owner", SW_OK, -1, 0);
+        say(out, "CLEAR_SPENT: the card is empty", "exact", SW_OK, clear);
+        byte[] anchorGenesis = concat(OWNER.pub, genesis), anchor = concat(OWNER.pub, h9);
+        owner(out, "SET_OWNER with an anchor that has not the work: refused, and the owner with it", SW_LITTLE_WORK, L_OWNER, OTHER_OWNER, anchorGenesis,
+            p -> new CommandAPDU(CLA, INS_SET_OWNER, 0, 0, ownerData(p, anchorGenesis)));
+        owner(out, "SET_OWNER with an anchor (145 bytes: the new owner's key and the tip's header), by the old owner's proof", SW_OK, L_OWNER, OTHER_OWNER, anchor,
+            p -> new CommandAPDU(CLA, INS_SET_OWNER, 0, 0, ownerData(p, anchor)));
+        say(out, "the info: the clock is the anchor's", "exact", SW_OK, info);
+        say(out, "the record: no roll, the default budget (00, read as 7), armed by the owner's proof", "exact", SW_OK, getCard);
+        byte[] budget0 = concat(u32(100), u32(0), u32(50), new byte[] { 0 }), budget31 = concat(u32(100), u32(0), u32(50), new byte[] { 31 });
+        owner(out, "a rollover budget of 0 is no budget", SW_WRONG_DATA, L_LIMIT, OWNER, budget0, p -> new CommandAPDU(CLA, INS_SET_LIMIT_OWNER, 0, 0, ownerData(p, budget0)));
+        owner(out, "nor is 31", SW_WRONG_DATA, L_LIMIT, OWNER, budget31, p -> new CommandAPDU(CLA, INS_SET_LIMIT_OWNER, 0, 0, ownerData(p, budget31)));
+        byte[] limits13 = concat(u32(100), u32(0), u32(50), new byte[] { 1 });
+        owner(out, "the limits in thirteen bytes: 100 a day, none on one payment, 50 with no PIN, a rollover budget of 1", SW_OK, L_LIMIT, OWNER, limits13,
+            p -> new CommandAPDU(CLA, INS_SET_LIMIT_OWNER, 0, 0, ownerData(p, limits13)));
+        say(out, "the record: the budget is 1", "exact", SW_OK, getCard);
+        owner(out, "the day's limit alone, in four bytes", SW_OK, L_LIMIT, OWNER, u32(100), p -> setLimitCommand(p, 100));
+        say(out, "the record: a form without the budget's byte leaves the budget as it was (D26)", "exact", SW_OK, getCard);
+        say(out, "load 10, to be paid with nothing leaving the card", "exact", SW_OK, new CommandAPDU(CLA, INS_LOAD_PROOF, 0, 0, buildProof(KEYSET, 10, 501), 1));
+        for (int i = 0; i < 3; i++) {
+            say(out, "load 60", "exact", SW_OK, new CommandAPDU(CLA, INS_LOAD_PROOF, 0, 0, buildProof(KEYSET, 60, 502 + i), 1));
+        }
+        sayReset(out, "taken away and put back a day on, by a reader with no PIN");
+        say(out, "select", "exact", SW_OK, select);
+        block(out, "the next day's header: the day is over", SW_OK, h10);
+        say(out, "a payment of the 10, no PIN: the places named", "exact", SW_OK, beginCommand(0));
+        int nothingAt = out.length();
+        ResponseAPDU nothingChange = say(out, "all of it back as the card's own change: 10, so that nothing leaves the card", "exact", SW_OK,
+            new CommandAPDU(CLA, INS_SPEND_ALL_CHANGE, 0, 0, u32(10), 33));
+        say(out, "the signature, with no PIN, under the allowance: nothing leaves the card", "sigall", SW_OK, SIGN_ALL);
+        say(out, "the info: the window is where it was, and nothing counted", "exact", SW_OK, info);
+        say(out, "the record: no roll spent by a payment that moves no value (D26)", "exact", SW_OK, getCard);
+        ResponseAPDU nothingOpened = say(out, "its change's opening, pending", "exact", SW_OK, new CommandAPDU(CLA, INS_GET_CHANGE, 0, 0, 256));
+        byte[] openN = null;
+        for (int k = 0; k < (nothingOpened.getData()[0] & 0xFF); k++) {
+            byte[] o = Arrays.copyOfRange(nothingOpened.getData(), 1 + 80 * k, 81 + 80 * k);
+            if (Arrays.equals(nothingChange.getData(), blindedFor(changeSecret(o, REFUND), Arrays.copyOfRange(o, 48, 80)))) openN = o;
+        }
+        assertNotNull(openN, "an opening opens the change of the payment of nothing");
+        String withN = "\"nonce\": \"" + toHex(Arrays.copyOfRange(openN, 16, 48)) + "\", \"r\": \"" + toHex(Arrays.copyOfRange(openN, 48, 80)) + "\", \"kind\": \"exact\"";
+        int n2 = out.indexOf("\"kind\": \"exact\"", nothingAt);
+        out.replace(n2, n2 + "\"kind\": \"exact\"".length(), withN);
+        say(out, "the PIN", "exact", SW_OK, verifyNew);
+        sayPay(out, "60 with the PIN, the tap's second payment (so it waits): the day rolls, and the budget's one roll is spent", SW_OK, -1, 1);
+        say(out, "the record: one roll, the budget spent; the roll spent the arming too", "exact", SW_OK, getCard);
+        sayReset(out, "taken away and put back the day after");
+        say(out, "select", "exact", SW_OK, select);
+        block(out, "the next day's header", SW_OK, h11);
+        say(out, "the PIN", "exact", SW_OK, verifyNew);
+        sayPay(out, "60 more: the budget is spent, the day stands, and 60 and 60 are over its 100", SW_OVER_LIMIT, 0, 2);
+        say(out, "the record: still one roll", "exact", SW_OK, getCard);
+        owner(out, "REFRESH by the old owner's key", SW_OWNER_PROOF, L_REFRESH, OTHER_OWNER, h11, p -> refreshCommand(p, h11));
+        owner(out, "REFRESH: the owner's phone, online, with the tip (the header the card has: it moves nothing), answers the clock", SW_OK, L_REFRESH, OWNER, h11,
+            p -> refreshCommand(p, h11));
+        say(out, "the record: no roll, the budget full again", "exact", SW_OK, getCard);
+        sayPay(out, "the 60 again: the day rolls", SW_OK, -1, 2);
+        say(out, "the record: one roll", "exact", SW_OK, getCard);
+        say(out, "the info: the new window, and 60 in it", "exact", SW_OK, info);
 
         String text = out.toString();
         text = text.substring(0, text.lastIndexOf(",\n")) + "\n]\n";
@@ -11166,7 +11252,7 @@ class CashuAppletTest {
         byte[] d = info();
         assertEquals(30, d.length);
         byte[] fresh = new byte[30];
-        fresh[0] = 2; fresh[1] = 0; fresh[2] = (byte) 128; fresh[5] = (byte) 128; fresh[6] = (byte) 0xFF; fresh[8] = 4; fresh[9] = 3;
+        fresh[0] = 2; fresh[1] = 1; fresh[2] = (byte) 128; fresh[5] = (byte) 128; fresh[6] = (byte) 0xFF; fresh[8] = 4; fresh[9] = 3;
         System.arraycopy(u32(nowBefore), 0, fresh, 17, 4);
         assertArrayEquals(fresh, d, "GET_INFO: a new card, with the clock it had");
         assertEquals(nowBefore, now());

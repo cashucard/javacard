@@ -19,7 +19,7 @@ import java.util.Arrays;
  * first instance it made whose AID begins with the name: a SELECT by the package AID {@code F0 CASHUCARD} reaches the
  * opener, made first, which answers 9000 with no version and 6D00 to everything after (ENG-681, DECISIONS D25).
  * jCardSim instead keeps its applets in a map sorted by AID and gives a partial name to the lowest that matches, which
- * here is the card's applet ({@code …44 01} sorts before {@code …44 4D}); left alone it would answer 02 00 where the
+ * here is the card's applet ({@code …44 01} sorts before {@code …44 4D}); left alone it would answer 02 01 where the
  * chip does not. So {@link #transmit} resolves a partial SELECT by name itself, against {@link #INSTANCES} in the
  * order {@link #install()} made them, and hands jCardSim the whole AID of the instance the chip would pick. Only a
  * SELECT by name for the first or only occurrence (P1 04, P2's low bits 00) is resolved; a whole AID, a name that
@@ -56,7 +56,7 @@ final class SimCard {
     static final String TAG_HEX = "D2760000850101";
     /** The instances, in the order {@link #install()} makes them and a chip is given them: the opener first (D25). */
     static final String[] INSTANCES = { OPENER_HEX, AID_HEX, TAG_HEX };
-    /** SELECT by the card's applet's whole AID, as a reader sends it (D25): answers 02 00. */
+    /** SELECT by the card's applet's whole AID, as a reader sends it (D25): answers 02 01. */
     static final byte[] SELECT = Hex.parse("00A404000B" + AID_HEX);
     /** SELECT by the package AID alone: a partial name, which reaches the opener (9000, no version). */
     static final byte[] SELECT_PACKAGE = Hex.parse("00A404000A" + PACKAGE_HEX);

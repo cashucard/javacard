@@ -56,8 +56,8 @@ real security property rather than a nicety (a nonce that is a pure function of
 `AUTH` burns nothing and needs no PIN.
 
 ```
-PASS  SELECT applet  — version 2.0
-PASS  GET_INFO  — v2.0, 128 slots, PIN set, owner yes
+PASS  SELECT applet  — version 2.1
+PASS  GET_INFO  — v2.1, 128 slots, PIN set, owner yes
 PASS  format 4 (SIG_ALL pieces)  — format 4
 PASS  Schnorr capability advertised  — caps=0xFF
 PASS  GET_PUBKEY well-formed  — 02a1b2c3d4e5f60718…  (33 bytes)
@@ -125,7 +125,7 @@ reader is the more reliable way to install, leaving NFC for tap testing.
 | `change-pin NEW` | the owner sets a new PIN: no old PIN, any state; unblocks a blocked card |
 | `set-card --mint URL [--refund HEX] [--pin P]` | write the record (the owner's proof on an owned card) |
 | `set-owner [--anchor HEADER] [--old-owner-key HEX]` | give the card its owner (the public half of `--owner-key`), anchored at a block header |
-| `set-limit --day N [--payment N --allowance N [--budget R]]` | the owner's limits; `--budget` (1–30) is the rollover budget, and needs the two before it; without it the card sets the budget back to 7 |
+| `set-limit --day N [--payment N --allowance N [--budget R]]` | the owner's limits; `--budget` (1–30) is the rollover budget, and needs the two before it; without it the card leaves the budget as it is ([D26](../../docs/DECISIONS.md#d26)) |
 | `set-header --header HEX` | `SET_HEADER`: show the card a block header |
 | `refresh --header HEX` | `REFRESH`: the owner's proof over the tip header; the rollover budget is full again |
 | `lock --pin P [--yes]` | **irreversibly** disable writes: the PIN and the owner's proof |

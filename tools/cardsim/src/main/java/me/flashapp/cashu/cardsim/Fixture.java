@@ -34,8 +34,9 @@ import java.util.Set;
  * </pre>
  *
  * {@code limits} always sends the owner's thirteen-byte SET_LIMIT: a key left out is 0 (no limit, no allowance), and
- * {@code rollBudget} left out is 7, the same default the card applies to a form without the byte (D20; the
- * architect's decision 2, "absent means 7"). tools/cardsim/README.md has the whole schema.
+ * {@code rollBudget} left out is 7, the card's default (D20). The card leaves its budget as it is for a form without
+ * the byte (D26); the fixture always sends it, so a fixture's card never keeps a budget from before. tools/cardsim/README.md
+ * has the whole schema.
  *
  * The pieces are format-4 SIG_ALL pieces locked to the card key (spec/NUT-XX.md), minted by the caller at a mint
  * after reading {@code /state.pubkey}; with {@code dleq} they are loaded with the mint's proof (LOAD_PROOF P1 = 1).

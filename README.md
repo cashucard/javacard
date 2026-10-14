@@ -5,7 +5,7 @@ for **offline NFC bearer payments** — a physical card that holds Bitcoin-
 denominated ecash on its own chip and spends it by tapping, with no phone, no
 account, and no internet at the point of sale.
 
-This is the **shared Cashu card protocol, version 2.0**: one wire for Flash and
+This is the **shared Cashu card protocol, version 2.1**: one wire for Flash and
 for the [Foxy](https://github.com/getfoxy/iOS) wallet. Reference implementation
 of **NUT-XX: Cashu NFC Card Protocol** ([`spec/NUT-XX.md`](spec/NUT-XX.md)).
 
@@ -75,7 +75,7 @@ see [D3](docs/DECISIONS.md#d3).
 
 **AID:** package `F0 43 41 53 48 55 43 41 52 44` ("CASHUCARD"), applet `…44 01`.
 A reader selects the applet's whole AID, `F0 43 41 53 48 55 43 41 52 44 01`, and
-`SELECT` answers `02 00`; the package AID alone reaches the opener on a chip
+`SELECT` answers `02 01`; the package AID alone reaches the opener on a chip
 ([D25](docs/DECISIONS.md#d25)). A card on the 0.x AID (`D2 76 00 00 85 01 02`) or Foxy's
 1.x AID answers nothing to it: it needs an update.
 
@@ -100,7 +100,7 @@ The SDK is not downloaded for you:
 git clone https://github.com/martinpaljak/oracle_javacard_sdks ~/.javacard/sdks
 
 ant -f applet/build.xml cap
-# → applet/target/cashu-javacard-2.0.0.cap   (three applets: the opener, the card's, then the NFC tag)
+# → applet/target/cashu-javacard-2.1.0.cap   (three applets: the opener, the card's, then the NFC tag)
 ```
 
 The build strips the Descriptor component and checks the load file's size against
@@ -133,7 +133,7 @@ on a simulator or emulator without a reader:
 ```bash
 tools/cardsim/cardsim.sh                               # from source, via Maven
 mvn -B -f tools/cardsim/pom.xml package && java -jar tools/cardsim/target/cardsim.jar
-curl -s -X POST localhost:9876/apdu -d '{"hex":"00A404000BF043415348554341524401"}'   # {"hex":"02009000","sw":"9000"}
+curl -s -X POST localhost:9876/apdu -d '{"hex":"00A404000BF043415348554341524401"}'   # {"hex":"02019000","sw":"9000"}
 ```
 
 Endpoints: `POST /apdu` (raw bytes in, data‖SW out, never retried), `POST /reset`

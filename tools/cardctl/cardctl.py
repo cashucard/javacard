@@ -111,9 +111,11 @@ CAP_SEALED_PIN = 0x80
 
 PIN_STATE_NAMES = {0: "none", 1: "set", 2: "blocked"}
 
-# The lowest applet version selftest passes: the shared protocol (D18). A 0.x
-# or Foxy 1.x card does not answer the 2.0 AID at all.
-SELFTEST_MIN_VERSION = (2, 0)
+# The lowest applet version selftest passes: the shared protocol (D18) as 2.1
+# has it (D26: a payment of nothing spends no roll, and SET_LIMIT without the
+# budget's byte leaves the budget). A 2.0 card is swept and reinstalled. A 0.x
+# or Foxy 1.x card does not answer the 2.x AID at all.
+SELFTEST_MIN_VERSION = (2, 1)
 FORMAT = 4
 
 LOCK_CONFIRM_BYTE = 0xDE
@@ -381,7 +383,7 @@ class Card:
             f"SELECT failed: {last}\n"
             "No 2.0 applet answers on this card. A card on the 0.x or Foxy 1.x applet needs an\n"
             "update (sweep it first, then reinstall: docs/HARDWARE_DEPLOYMENT.md):\n"
-            "  applet/target/cashu-javacard-2.0.0.cap"
+            "  applet/target/cashu-javacard-2.1.0.cap"
         )
 
     # ── read commands ─────────────────────────────────────────────────────────
@@ -1542,14 +1544,14 @@ def cmd_selftest(args) -> int:
 def _select_verdict(version: bytes) -> Tuple[bool, str]:
     """
     Whether the applet version SELECT answered is a build selftest can pass:
-    protocol 2.0 or a later 2.x. The 2.0 AID answers nothing else, so a
-    version below it means a card that is not what it says.
+    protocol 2.1 or a later 2.x. The 2.x AID answers nothing below 2.0, and a
+    2.0 card is the v2.0.0 release, which D26 replaced: it is reinstalled.
     """
     if len(version) < 2:
         return False, "SELECT returned no applet version"
     ver = tuple(version[:2])
     if ver[0] != SELFTEST_MIN_VERSION[0] or ver < SELFTEST_MIN_VERSION:
-        return False, (f"applet {ver[0]}.{ver[1]} is not protocol 2.0: sweep the balance, then "
+        return False, (f"applet {ver[0]}.{ver[1]} is not protocol 2.1 or a later 2.x: sweep the balance, then "
                        f"reinstall the tracked CAP (docs/HARDWARE_DEPLOYMENT.md)")
     return True, f"version {ver[0]}.{ver[1]}"
 

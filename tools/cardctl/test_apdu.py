@@ -874,9 +874,9 @@ def _bip340_sign(seckey: int, msg: bytes) -> bytes:
 
 
 class FakeApplet:
-    """A PC/SC connection answering like the 2.0 applet, as far as selftest goes."""
+    """A PC/SC connection answering like the 2.1 applet, as far as selftest goes."""
 
-    def __init__(self, version=(2, 0), pin_state=1, pin=b"1234", has_owner=True, fixed_aux=False):
+    def __init__(self, version=(2, 1), pin_state=1, pin=b"1234", has_owner=True, fixed_aux=False):
         self.version = bytes(version)
         self.pin_state = pin_state
         self.pin = pin
@@ -975,7 +975,7 @@ def run_selftest(applet, *flags):
     return rc, buf.getvalue()
 
 
-def test_selftest_passes_a_2_0_card_and_verifies_every_auth_signature():
+def test_selftest_passes_a_2_1_card_and_verifies_every_auth_signature():
     """Also proves the model signs for real, which the tests below rely on."""
     applet = FakeApplet(pin_state=1)
     rc, out = run_selftest(applet, "--pin", "1234")
@@ -1021,12 +1021,13 @@ def test_selftest_fails_a_card_whose_signatures_repeat_their_nonce():
     assert "FAIL  fresh nonce across identical requests" in out, out
 
 
-def test_select_verdict_passes_only_2_x_at_or_over_2_0():
-    assert cardctl._select_verdict(bytes([2, 0])) == (True, "version 2.0")
+def test_select_verdict_passes_only_2_x_at_or_over_2_1():
+    assert cardctl._select_verdict(bytes([2, 1])) == (True, "version 2.1")
     assert cardctl._select_verdict(bytes([2, 3]))[0] is True
-    for version in (bytes([1, 20]), bytes([0, 6]), bytes([3, 0])):
+    # 2.0 is the v2.0.0 release, whose day a payment of nothing rolled (D26): swept and reinstalled
+    for version in (bytes([2, 0]), bytes([1, 20]), bytes([0, 6]), bytes([3, 0])):
         ok, detail = cardctl._select_verdict(version)
-        assert ok is False and "not protocol 2.0" in detail and "reinstall the tracked CAP" in detail, detail
+        assert ok is False and "not protocol 2.1" in detail and "reinstall the tracked CAP" in detail, detail
     ok, detail = cardctl._select_verdict(b"")
     assert ok is False and "no applet version" in detail, detail
 

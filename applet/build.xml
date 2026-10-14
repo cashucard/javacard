@@ -13,11 +13,11 @@
          ant cap -Djc.sdk=$HOME/.javacard/sdks/jc305u4_kit
 
   Build:
-    ant cap            → applet/target/cashu-javacard-2.0.0.cap
+    ant cap            → applet/target/cashu-javacard-2.1.0.cap
     ant cap-debug      → same but with debug info
 
   Deploy (after build):
-    gp -install target/cashu-javacard-2.0.0.cap (see docs/HARDWARE_DEPLOYMENT.md: three applets, the opener first)
+    gp -install target/cashu-javacard-2.1.0.cap (see docs/HARDWARE_DEPLOYMENT.md: three applets, the opener first)
     gp -list
 
   (GlobalPlatformPro accepts single-dash long options; the double-dash form
@@ -51,7 +51,7 @@
               value="${user.home}/.javacard/sdks/jc305u4_kit"/>
     <property name="src.dir"    value="src/main/java"/>
     <property name="target.dir" value="target"/>
-    <property name="cap.file"   value="${target.dir}/cashu-javacard-2.0.0.cap"/>
+    <property name="cap.file"   value="${target.dir}/cashu-javacard-2.1.0.cap"/>
 
     <!-- ── Download ant-javacard plugin ───────────────────────────────── -->
     <!--
@@ -176,7 +176,7 @@ compromised or truncated download.
                 targetsdk="${jc.sdk}"
                 sources="${src.dir}"
                 package="me.flashapp.cashu"
-                version="2.0"
+                version="2.1"
                 aid="F0:43:41:53:48:55:43:41:52:44"
                 output="${cap.file}">
                 <!-- The opener FIRST: the chip takes the card's applet only after a small one has been
@@ -215,9 +215,9 @@ compromised or truncated download.
                 targetsdk="${jc.sdk}"
                 sources="${src.dir}"
                 package="me.flashapp.cashu"
-                version="2.0"
+                version="2.1"
                 aid="F0:43:41:53:48:55:43:41:52:44"
-                output="${target.dir}/cashu-javacard-2.0.0-debug.cap"
+                output="${target.dir}/cashu-javacard-2.1.0-debug.cap"
                 debug="true">
                 <applet class="me.flashapp.cashu.Opener"
                         aid="F0:43:41:53:48:55:43:41:52:44:4D"/>

@@ -231,7 +231,7 @@ def test_the_applet_version_is_the_one_the_spec_the_guide_and_selftest_expect():
     """
     version = dict(re.findall(r"static final byte VERSION_(MAJOR|MINOR)\s*=\s*\(byte\)\s*0x([0-9A-Fa-f]{2})", _applet_text()))
     major, minor = int(version["MAJOR"], 16), int(version["MINOR"], 16)
-    assert (major, minor) == (2, 0)
+    assert (major, minor) == (2, 1)
     assert f"`{major:02X} {minor:02X}`" in _heading_body("SELECT APPLICATION"), "the spec's SELECT response"
     guide = DEPLOYMENT_MD.read_text(encoding="utf-8")
     tracked = re.search(r"The CAP tracked in this repo is \*\*applet version (\d+)\.(\d+)\*\*", guide)

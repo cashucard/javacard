@@ -105,7 +105,7 @@ const SELECT_AIDS = Object.freeze([APPLET_AID, PACKAGE_AID])
 // Withdrawn: a card that answers these, or does not answer the 2.0 AID, needs an update.
 const OLD_AIDS = Object.freeze({ upstream0x: Buffer.from("D2760000850102", "hex"), foxy1x: Buffer.from("F0464F585943415244", "hex") })
 
-const VERSION = Object.freeze({ major: 2, minor: 0 })
+const VERSION = Object.freeze({ major: 2, minor: 1 })
 const MAX_PROOFS = 128
 const PROOF_SIZE = 82
 const DLEQ_LEN = 96

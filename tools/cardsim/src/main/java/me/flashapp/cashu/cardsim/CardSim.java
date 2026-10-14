@@ -41,7 +41,7 @@ import java.util.function.Supplier;
  *
  * <dl>
  *   <dt>{@code POST /apdu}  {"hex": "00A404000BF043415348554341524401"}</dt>
- *   <dd>{@code 200 {"hex": "02009000", "sw": "9000"}} — the applet's answer,
+ *   <dd>{@code 200 {"hex": "02019000", "sw": "9000"}} — the applet's answer,
  *       data‖SW. A non-9000 status word is still a 200: the transport worked,
  *       the card refused. 400 for bad JSON or bad hex. A SELECT by the package
  *       AID alone reaches the opener, as on a chip ({@code "9000"}, no version;

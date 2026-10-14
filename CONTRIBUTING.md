@@ -104,7 +104,7 @@ the shaded jar started and driven by the Node client, and a `SIG_ALL` swap at tw
 Nutshell 0.20.3 mints: an 8-byte keyset id with no fee, as forge runs, and a
 33-byte v2 id with a fee) on JDK 11 and 17, the `cardctl` suite on Python 3.11 and
 3.13, and the CAP conversion with its size check, on every push. The conversion is also
-compared with the CAP tracked at `applet/target/cashu-javacard-2.0.0.cap`: every
+compared with the CAP tracked at `applet/target/cashu-javacard-2.1.0.cap`: every
 entry but `META-INF/MANIFEST.MF` must match, and
 [`docs/HARDWARE_DEPLOYMENT.md`](docs/HARDWARE_DEPLOYMENT.md) must publish the
 tracked CAP's sha256. So a change to the applet source ships with the rebuilt

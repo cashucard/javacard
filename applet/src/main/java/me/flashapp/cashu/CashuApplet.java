@@ -12,10 +12,10 @@ import javacardx.crypto.*;
  * spend counters. Provides secp256k1 signing for NUT-11 P2PK spending
  * conditions.
  *
- * This is the shared Cashu card protocol, version 2.0: the Foxy wallet
+ * This is the shared Cashu card protocol, version 2.1: the Foxy wallet
  * project's fork at software 1.20 (docs/FOXY-CARD-SPEC.md), merged back into
  * cashu-javacard with a neutral identity and the fixes in docs/DECISIONS.md
- * D18 to D24. It is not compatible on the wire with cashu-javacard 0.x nor
+ * D18 to D26. It is not compatible on the wire with cashu-javacard 0.x nor
  * with Foxy's 1.x, and has an AID of its own so that none of the three can be
  * mistaken for another:
  *
@@ -120,6 +120,11 @@ public class CashuApplet extends Applet implements TagSwitch {
     // SET_OWNER (D20), a field multiply with no secret-dependent branch (D21; the reductions still branch, SECURITY-MODEL open item 5), the PIN state as the PIN's commit byte (D22),
     // the tear review (D23) and a floor of work recomputed for its own time (D24).
     // The minor counts from 0 again: 2.0 is the first of the shared wire.
+    // 2.1 is ENG-699 (D26, from Mike Greff's review): a payment that moves no value (all of it back as the card's own change)
+    // neither begins a day nor spends a roll of the budget, and a SET_LIMIT without the budget's byte (4, 8 or 12 bytes, and
+    // the PIN's form) leaves the budget as it is, where 2.0 set it back to 7. Nothing on the wire is added or moved; two
+    // answers change (GET_CARD's bytes 76 and 77 after such a payment or such a SET_LIMIT), and v2.0.0 was released with
+    // the old ones, so a reader can tell the two builds apart by the minor alone.
     static final byte VERSION_MAJOR = (byte) 0x02;
     // 1.9 takes its PIN sealed: enciphered to a key the card keeps for that and nothing else, under
     // sixteen bytes of its own that are good once (see `unseal`). Capability bit 7 says so.
@@ -167,7 +172,7 @@ public class CashuApplet extends Applet implements TagSwitch {
     // constructor, which the chip refuses to install with so much more in it (docs/FOXY-CARD-HARDWARE.md); the same bytes asked for
     // after the install are given. Every use of `dleq` is safe while it is null (before the first SET_CARD, or after the card has
     // refused the room). GET_INFO is 1.19's to the byte but for the version; a phone tells a 1.20 card by that.
-    static final byte VERSION_MINOR = (byte) 0x00;
+    static final byte VERSION_MINOR = (byte) 0x01;
     static final byte FORMAT        = (byte) 0x04;
 
     // -------------------------------------------------------------------------
@@ -2103,7 +2108,8 @@ public class CashuApplet extends Applet implements TagSwitch {
          * counted goes to nothing. */
         boolean windowed = limited || !isZero(cardRecord, CARD_NOPIN_LIMIT_OFFSET, (short) 4);
         /* 2.0 (D20): a day that is over begins again only while the rollover budget lasts (`windowRolls`), and the
-         * allowance begins again with it only if a PIN or an owner's proof has armed it since it last did. */
+         * allowance begins again with it only if a PIN or an owner's proof has armed it since it last did. A payment
+         * that moves no value (all of it back as the card's own change) begins no day and spends no roll (D26). */
         boolean newDay = windowed && windowRolls();
         /* The first window a card begins (its start still 0: a limit or allowance set before any header, or an allowance
          * set alone) is a beginning, not a roll: it spends no budget and needs no arming. */
@@ -2792,7 +2798,7 @@ public class CashuApplet extends Applet implements TagSwitch {
      * with no PIN has no allowance to set: a 12-byte form with a number in the
      * allowance is refused (`6985`), and one with a zero in it is the 8-byte form.
      * 2.0 (D20) adds a thirteenth byte, the rollover budget (1 to 30); a form
-     * without it sets the budget to its default, 7.
+     * without it leaves the budget as it is (D26).
      */
     private void processSetLimitOwner(APDU apdu) {
         requireNotLocked();
@@ -2822,7 +2828,7 @@ public class CashuApplet extends Applet implements TagSwitch {
      */
     /*
      * `len` is 4, 8, 12 or 13 (the owner's form only: the rollover budget,
-     * D20; every shorter form sets the budget back to its default, 7). Four
+     * D20; every shorter form leaves the budget as it is, D26). Four
      * bytes are the day's limit, as they always were,
      * and the limit on one payment and the allowance are left as they are.
      * Eight are the day's, then the limit on one payment; twelve add the
@@ -2860,10 +2866,11 @@ public class CashuApplet extends Applet implements TagSwitch {
             Util.arrayCopy(src, (short)(at + 8), cardRecord, CARD_NOPIN_LIMIT_OFFSET, (short) 4);
             Util.arrayCopy(ZERO, (short) 0, cardRecord, CARD_NOPIN_SPENT_OFFSET, (short) 4);
         }
-        /* The rollover budget (2.0, D20): the owner's thirteenth byte, or, absent, the default (0, read as
-         * ROLL_BUDGET_DEFAULT). Every form without the byte sets it back to 7: the architect's decision 2 (ENG-673),
-         * which both apps code to, so that a SET_LIMIT always says what the budget is afterwards. */
-        cardRecord[CARD_BUDGET_OFFSET] = len == (short) 13 ? src[(short)(at + 12)] : (byte) 0;
+        /* The rollover budget (2.0, D20): the owner's thirteenth byte. A form without it (4, 8 or 12 bytes, and the PIN's
+         * form) leaves the budget as it is (D26, amending D20's "absent means 7"): a wallet that sets a limit and does not
+         * know the byte neither loosens nor tightens the owner's choice. The rolls are not touched: a budget set under
+         * them stops the day until the next REFRESH. */
+        if (len == (short) 13) cardRecord[CARD_BUDGET_OFFSET] = src[(short)(at + 12)];
         JCSystem.commitTransaction();
     }
 
@@ -3932,14 +3939,20 @@ public class CashuApplet extends Applet implements TagSwitch {
     }
 
     /**
-     * Whether a payment now begins a new day (2.0, D20): the day is over, and the window has rolled fewer times
-     * since the owner's last REFRESH (or anchored SET_OWNER) than the rollover budget allows. Past the budget the
-     * window stays where it is, and what was signed for in it still counts: a terminal that holds the PIN and
+     * Whether the payment in hand now begins a new day (2.0, D20): the day is over, and the window has rolled fewer
+     * times since the owner's last REFRESH (or anchored SET_OWNER) than the rollover budget allows. Past the budget
+     * the window stays where it is, and what was signed for in it still counts: a terminal that holds the PIN and
      * walks the clock forward with headers gets the budget's days and no more, until the owner's phone has seen
-     * the card again.
+     * the card again. A budget set under the rolls already spent stops the day at once.
+     *
+     * And only a payment that moves value (D26): `allNet`, what leaves the card for good, the pieces less the card's
+     * own change, is not 0. A payment of nothing begins no day, first or not, and spends no roll; it is counted, as
+     * nothing, in the window as it stands. Without that a reader with no PIN, walking real headers, spent the budget a
+     * roll a tap at no cost, and left the owner one day's limit until the next REFRESH. (`allNet` is SIGN's: BEGIN asks
+     * the day only of a sum that wraps, which is refused whatever the day.)
      */
     private boolean windowRolls() {
-        if (!dayIsOver()) return false;
+        if (isZero(allNet, (short) 0, (short) 4) || !dayIsOver()) return false;
         // a window not yet begun begins whatever the budget: that is no roll
         if (windowNotBegun()) return true;
         byte budget = cardRecord[CARD_BUDGET_OFFSET];

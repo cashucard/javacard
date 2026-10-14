@@ -89,7 +89,7 @@ jobs:
       - name: Smoke-test SELECT over HTTP
         run: |
           curl -sf -X POST localhost:9876/apdu -d '{"hex":"00A404000BF043415348554341524401"}' \
-            | grep -q '"hex":"02009000"'
+            | grep -q '"hex":"02019000"'
           curl -sf -X POST localhost:9876/apdu -d '{"hex":"00A404000AF0434153485543415244"}' \
             | grep -q '"hex":"9000"'
 
@@ -260,7 +260,7 @@ jobs:
       # move the tracked one aside first: the CAP the next steps look at is then
       # this commit's source, freshly converted, or nothing at all.
       - name: Set the tracked CAP aside
-        run: mv applet/target/cashu-javacard-2.0.0.cap "$RUNNER_TEMP/tracked.cap"
+        run: mv applet/target/cashu-javacard-2.1.0.cap "$RUNNER_TEMP/tracked.cap"
 
       # 3.0.5 is the floor: SchnorrHW needs ALG_EC_SVDP_DH_PLAIN_XY, which does
       # not exist in 3.0.4. The target also runs tools/stripcap.py (the
@@ -272,7 +272,7 @@ jobs:
 
       - name: Assert CAP was produced
         run: |
-          cap=applet/target/cashu-javacard-2.0.0.cap
+          cap=applet/target/cashu-javacard-2.1.0.cap
           test -s "$cap" || { echo "::error::$cap was not produced"; exit 1; }
           ls -l "$cap"
 
@@ -287,9 +287,9 @@ jobs:
           tracked="$RUNNER_TEMP/tracked.cap"
           mkdir "$RUNNER_TEMP/tracked" "$RUNNER_TEMP/built"
           unzip -q "$tracked" -d "$RUNNER_TEMP/tracked"
-          unzip -q applet/target/cashu-javacard-2.0.0.cap -d "$RUNNER_TEMP/built"
+          unzip -q applet/target/cashu-javacard-2.1.0.cap -d "$RUNNER_TEMP/built"
           diff -r -x MANIFEST.MF "$RUNNER_TEMP/tracked" "$RUNNER_TEMP/built" || {
-            echo "::error::the tracked CAP was not built from this source: run ant cap, commit applet/target/cashu-javacard-2.0.0.cap, and publish its sha256 in docs/HARDWARE_DEPLOYMENT.md"
+            echo "::error::the tracked CAP was not built from this source: run ant cap, commit applet/target/cashu-javacard-2.1.0.cap, and publish its sha256 in docs/HARDWARE_DEPLOYMENT.md"
             exit 1
           }
           sha=$(sha256sum "$tracked" | cut -c1-64)
@@ -303,5 +303,5 @@ jobs:
         uses: actions/upload-artifact@v5
         with:
           name: cashu-javacard-cap
-          path: applet/target/cashu-javacard-2.0.0.cap
+          path: applet/target/cashu-javacard-2.1.0.cap
           if-no-files-found: error

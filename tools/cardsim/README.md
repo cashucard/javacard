@@ -117,10 +117,11 @@ and `/state.fixtureError` keeps `{step, sw}` until the next fixture or reset.
 
 **`limits` always sends 13 bytes.** The bridge sends the owner's thirteen-byte
 `SET_LIMIT`: `day`, `payment` and `allowance` (each 0 when left out: no limit, no
-allowance), then `rollBudget`, which is **7 when left out**. That is the same rule
-the card applies to a `SET_LIMIT` without the thirteenth byte: absent means 7 (the
-architect's decision 2, [D20](../../docs/DECISIONS.md#d20)). So a fixture with
-`limits` always leaves the budget at what it says, or at 7.
+allowance), then `rollBudget`, which is **7 when left out**: the card's default
+([D20](../../docs/DECISIONS.md#d20)). So a fixture with `limits` always leaves the
+budget at what it says, or at 7. (The card itself leaves the budget as it is for a
+`SET_LIMIT` without the thirteenth byte, [D26](../../docs/DECISIONS.md#d26); the
+fixture sends the byte every time, so its card's budget is never a leftover.)
 
 **`owner: true`** sets the **public** TEST owner key: the P-256 private key
 `SHA-256("cashu-javacard/cardctl test owner key") mod n`. `tools/cardctl/p256.py`
@@ -143,7 +144,7 @@ Read through commands that need no PIN and change nothing (`GET_INFO P1 = 2`,
 |---|---|
 | `generation` | goes up on every reset and fixture, so a test can tell its card from one another run left |
 | `deterministicKey` | always `true` |
-| `version` | `"2.0"` |
+| `version` | `"2.1"` |
 | `pubkey` | the card key, 33 bytes compressed |
 | `balance` | sats in unspent pieces |
 | `pinState`, `tries`, `locked` | `0` no PIN, `1` set, `2` blocked; tries left; the owner's lock |
@@ -169,7 +170,7 @@ and the rest), `encode`, `constants` (INS, status words, labels), the parsers,
 fail before the HTTP call; the bridge's checks against the card are the final word), `ownerProof`, `ownerData` and `limitValue`. A refused command throws
 `CardError` with its `sw`. A transport failure throws `CardSimError`. Requests time
 out after 5 s. `client.setLimit(…)` without `rollBudget` sends no thirteenth byte,
-so the card sets its budget back to 7.
+so the card leaves its budget as it is (D26).
 
 `tools/cardsim/cashu-crypto.cjs` is the Cashu arithmetic the tests use (NUT-00
 blinding, NUT-12 DLEQ, BIP-340, the format-4 card secret and the SIG_ALL message),
@@ -190,7 +191,7 @@ curl -s -X POST localhost:9876/fixture -d '{
 }' | jq '{balance, rollBudget, counts}'
 # {"balance": 32, "rollBudget": 7, "counts": {"unspent": 1, "spent": 0, "empty": 127}}
 curl -s -X POST localhost:9876/apdu -d '{"hex":"00A404000BF043415348554341524401"}'
-# {"hex":"02009000","sw":"9000"}
+# {"hex":"02019000","sw":"9000"}
 ```
 
 **SELECT the applet's whole AID** (`F0 CASHUCARD 01`, [D25](../../docs/DECISIONS.md#d25)).
