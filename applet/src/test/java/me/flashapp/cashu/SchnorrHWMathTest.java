@@ -200,8 +200,11 @@ class SchnorrHWMathTest {
         int to = model.indexOf("6. **", from);
         org.junit.jupiter.api.Assertions.assertTrue(from >= 0 && to > from, "SECURITY-MODEL has open item 5");
         String item5 = model.substring(from, to);
-        int d21 = decisions.indexOf("D21 — ");
-        String d21Text = decisions.substring(d21, decisions.indexOf("D22 — ", d21));
+        // Decision anchors are stable; editorial titles and punctuation may change.
+        int d21 = decisions.indexOf("<a id=\"d21\"></a>");
+        int d22 = decisions.indexOf("<a id=\"d22\"></a>", d21);
+        org.junit.jupiter.api.Assertions.assertTrue(d21 >= 0 && d22 > d21, "DECISIONS retains the D21 and D22 anchors");
+        String d21Text = decisions.substring(d21, d22);
         java.util.List<String> problems = new java.util.ArrayList<>();
         for (String name : OPEN_BRANCHING_REDUCTIONS) {
             java.util.regex.Matcher m = java.util.regex.Pattern.compile("static\\s+\\w+\\s+" + name + "\\(").matcher(src);

@@ -1,14 +1,14 @@
-# Foxy card: a fork of cashu-javacard, for your review
+<a id="foxy-card-a-fork-of-cashu-javacard-for-your-review"></a>
 
-> **Merged into cashu-javacard as protocol 2.0 (ENG-673, [DECISIONS D18](DECISIONS.md#d18)).** This
-> document is Foxy's, as it stood at software 1.20, kept for its design and its
-> reasons. On the 2.0 wire a reader SELECTs the applet's whole AID
-> `F0 43 41 53 48 55 43 41 52 44 01` ([D25](DECISIONS.md#d25)), not
-> `F0 FOXYCARD 01`; the package AID alone reaches the opener on a chip. That
-> `SELECT` answers `02 01`, every `FoxyCard/…` label is
-> `CashuCard/…`, and D20 to D26 add to it (the rollover budget and `REFRESH`, the
-> anchored owner, and the fixes). Where this and [`spec/APDU.md`](../spec/APDU.md) differ, the
-> spec is the 2.0 wire.
+# Foxy fork review (historical)
+
+> Historical Foxy design, recorded at software 1.20 and incorporated into
+> shared protocol 2.0 ([D18](DECISIONS.md#d18)). The current applet wire is
+> [protocol 2.1](../spec/APDU.md): readers SELECT the full applet AID
+> `F043415348554341524401`, which answers `02 01`. Owner labels use
+> `CashuCard/…`; [D20](DECISIONS.md#d20) through [D26](DECISIONS.md#d26)
+> record the shared protocol changes. Use the current APDU reference when
+> implementing a reader.
 
 From the Foxy wallet project (getfoxy), to the authors of `cashucard/javacard`.
 
@@ -34,7 +34,9 @@ and the PIN made optional in 1.16: the rows and sentences that name them say wha
 the card does now. For the rest,
 `docs/FOXY-CARD-SPEC.md` and `docs/FOXY-CARD-DAILY-LIMIT.md` are what is built.
 
-## 1. What we would like you to look at
+<a id="1-what-we-would-like-you-to-look-at"></a>
+
+## 1. Review questions
 
 1. **SPEND with no message from the reader** (3.2). Is rebuilding the secret
    on the card and hashing it there sound, and affordable on a J3R180? It is a
@@ -80,7 +82,9 @@ the card does now. For the rest,
    compatible with your wire, by intent, and has an AID of its own so neither
    applet can be taken for the other.
 
-## 2. What it does
+<a id="2-what-it-does"></a>
+
+## 2. Card behavior
 
 - A holder sets up a new card from their own phone, in one tap: the phone
   gives the card a PIN, then a record (which names the mint its ecash is at),
@@ -104,7 +108,9 @@ the card does now. For the rest,
   another day it must bring a block header dated later, which takes the work of a
   block to make (see item 3 above).
 
-## 3. What we found in 0.4, and what the fork does
+<a id="3-what-we-found-in-04-and-what-the-fork-does"></a>
+
+## 3. Version 0.4 findings and fork changes
 
 We read 0.2 first and 0.4 again at `c1f4580`. If any of this has changed
 since, the fault is in our reading.
@@ -127,7 +133,9 @@ Number 2 and number 3 are the ones that matter most. Together they mean the
 SPENT flag on the card protects nothing: the signature is what spends, and
 the card will sign without burning the right slot, or any slot.
 
-## 4. What changed on the wire
+<a id="4-what-changed-on-the-wire"></a>
+
+## 4. Wire changes
 
 Class `B0` as yours. AID: package `F0 46 4F 58 59 43 41 52 44`, applet the same with `01`.
 
@@ -254,7 +262,9 @@ yours are: lose the card and the money is gone. A forgotten PIN or a blocked
 card is put right from the owner's phone, which sets a new PIN with no old one.
 The app says a card is cash when it is set up.
 
-## 6. What has been tested, and what has not
+<a id="6-what-has-been-tested-and-what-has-not"></a>
+
+## 6. Verification coverage
 
 Tested:
 - The applet under jCardSim, including every gated command in every PIN state,
@@ -297,7 +307,9 @@ Not tested:
   been run on a real card, and so has not been timed.
 - Any mint's behaviour once a locktime has passed.
 
-## 7. Three things that may be useful to you
+<a id="7-three-things-that-may-be-useful-to-you"></a>
+
+## 7. Integration resources
 
 - **Long keyset ids.** A slot has 8 bytes for the keyset. Mints we tried now
   name keysets by 33 bytes (ids beginning `01`). We store NUT-02's short form,
@@ -312,7 +324,9 @@ Not tested:
   simulated cards are one card to a wallet that files things by card key. Our
   test server reseeds the key pair by reflection.
 
-## 8. What it does not protect against
+<a id="8-what-it-does-not-protect-against"></a>
+
+## 8. Residual risks
 
 A card is cash. It holds what is put on it. The daily limit bounds a terminal
 that has been handed the PIN, honest or built to cheat, to one day's limit per
@@ -356,7 +370,9 @@ visit, where the owner has set one.
   be loaded.
 - A cash card that is lost is lost money.
 
-## 9. Where it is
+<a id="9-where-it-is"></a>
+
+## 9. Source locations
 
 Two public repositories.
 

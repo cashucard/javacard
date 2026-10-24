@@ -1,7 +1,11 @@
 # Architecture
 
-How the pieces fit together, what each is responsible for, and — stated
-explicitly — which parts do not exist yet.
+> **Historical implementation snapshot.** This page records an earlier project
+> milestone. Use the [current architecture](https://github.com/cashucard/cashucard/blob/main/docs/ARCHITECTURE.md)
+> and [security model](https://github.com/cashucard/cashucard/blob/main/docs/SECURITY-MODEL.md)
+> for current component boundaries, hardware evidence and outstanding work.
+
+How the pieces fit together, what each does, and which parts remain to be built.
 
 For *why* it is shaped this way, read [`VISION.md`](VISION.md) first. For the
 specific engineering calls, [`DECISIONS.md`](DECISIONS.md).
@@ -12,16 +16,16 @@ Five components across four repositories plus a running mint:
 
 | Component | Repo | Language | Status |
 |---|---|---|---|
-| **Applet** — the card firmware | [`cashu-javacard`](https://github.com/cashucard/javacard) `applet/` | JavaCard | **Hardware-proven** — selftest 10/10; load/spend/melt/PIN all run on silicon (see the [test report](HARDWARE_TEST_REPORT_2026-09-22.j3r180.md)) |
-| **cardctl** — host driver | [`cashu-javacard`](https://github.com/cashucard/javacard) `tools/cardctl/` | Python | Proven against a real card (ACR122U) |
-| **cashu-client** — mint protocol | [`cashu-client`](https://github.com/cashucard/client) | TypeScript | Load + redeem implemented; both proven end-to-end on hardware via `tools/e2e-*.cjs` |
-| **Card artwork** — physical design | [`flash-card-assets`](https://github.com/lnflash/flash-card-assets) | SVG/PDF | Draft v1, not released to plate |
-| **Flash Forge** — the mint | `forge.flashapp.me` | Nutshell (Python) | **Live, solvent, in production** |
-| **Merchant terminal** | [`flash-pos`](https://github.com/lnflash/flash-pos) | React Native | Read path (`SELECT/GET_INFO/GET_PUBKEY/GET_BALANCE`) **hardware-validated on iOS**; spend wiring pending — the offline settlement queue (#68) is merged and waiting for it |
+| **Applet: card firmware** | [`cashu-javacard`](https://github.com/cashucard/javacard) `applet/` | JavaCard | **Hardware-proven:** selftest 10/10; load/spend/melt/PIN all run on silicon (see the [test report](HARDWARE_TEST_REPORT_2026-09-22.j3r180.md)) |
+| **cardctl: host driver** | [`cashu-javacard`](https://github.com/cashucard/javacard) `tools/cardctl/` | Python | Proven against a real card (ACR122U) |
+| **cashu-client: mint protocol** | [`cashu-client`](https://github.com/cashucard/client) | TypeScript | Load + redeem implemented; both proven end-to-end on hardware via `tools/e2e-*.cjs` |
+| **Card artwork: physical design** | [`flash-card-assets`](https://github.com/lnflash/flash-card-assets) | SVG/PDF | Draft v1; plate release pending |
+| **Flash Forge: the mint** | `forge.flashapp.me` | Nutshell (Python) | **Live, solvent, in production** |
+| **Merchant terminal** | [`flash-pos`](https://github.com/lnflash/flash-pos) | React Native | Read path (`SELECT/GET_INFO/GET_PUBKEY/GET_BALANCE`) **hardware-validated on iOS**; spend wiring pending, the offline settlement queue (#68) is merged and waiting for it |
 
 The terminal gap is closing. flash-pos carries the Cashu card spike (#67:
 IsoDep APDU transport) and the offline settlement queue for card payments
-(#68); on 2026-09-23 its read path ran against a real card from an iPhone —
+(#68); on 2026-09-23 its read path ran against a real card from an iPhone;
 see the test report. What remains before a card can be *spent in the field* is
 the spend wiring: the mint round-trip from `cashu-client` behind the
 settlement queue, plus the top-up (PIN) path.
@@ -65,15 +69,15 @@ merchant, that a message is a real payment, or that a proof it is handed is
 genuine. It does exactly one security-relevant thing: it will not produce a
 second signature for a slot it has already marked spent.
 
-**The terminal is not trusted either** — by anyone. It cannot forge proofs (it
+**Assume the terminal is hostile.** It cannot forge proofs (it
 lacks the mint's key) and it cannot spend a card's proofs elsewhere (they are
 P2PK-locked to the card). It *can* refuse to settle, or lie to the customer
 about the amount, which is ordinary merchant risk.
 
-**The mint is trusted for solvency and nothing else.** It could try to tag users
-by signing with per-user keys — [NUT-12 DLEQ](https://github.com/cashubtc/nuts/blob/main/12.md)
-detects that, and `cashu-client` verifies it. It could become insolvent — which
-is why [the reserve is monitored publicly](https://forge.flashapp.me/reserves).
+**The mint is trusted for solvency and nothing else.** Per-user signing keys
+could tag users. [NUT-12 DLEQ](https://github.com/cashubtc/nuts/blob/main/12.md)
+detects that, and `cashu-client` verifies it. Public reserve monitoring tracks
+the risk of insolvency ([the reserve](https://forge.flashapp.me/reserves)).
 
 ## Division of labour: why the card does so little
 
@@ -83,8 +87,8 @@ a mint, and never sees a blinding factor. It stores proofs and it signs.
 That is deliberate. JavaCard has no big-integer arithmetic, no `long`, and no
 garbage collector; every byte of scratch space must be allocated once at install
 time. Implementing blinding on-card would multiply the applet's size and its
-attack surface to buy nothing — the blinding math is not secret and the host is
-already the party that must know `r` in order to unblind.
+attack surface. The blinding math is public, and the host must know `r` to
+unblind.
 
 So the split is:
 
@@ -111,7 +115,7 @@ Offset  Size  Field
 1       8     keyset_id (the NUT-02 keyset id as 8 RAW bytes = 16 hex chars)
 9       4     amount (uint32, big-endian, in the keyset's base unit)
 13      32    nonce (the 32-byte nonce from the NUT-10 P2PK secret)
-45      33    C (compressed secp256k1 point — the mint's unblinded signature)
+45      33    C (compressed secp256k1 point representing the mint's unblinded signature)
 ```
 
 Two fields here are easy to get wrong, and both make proofs unspendable:
@@ -129,10 +133,10 @@ Two fields here are easy to get wrong, and both make proofs unspendable:
 Protocol 2.0: 128 slots × 82 bytes (the 78 above and a 4-byte date) = **10,496
 bytes** of proof storage, 130 bytes a slot more of the hex text a payment hashes,
 and, reserved by the first `SET_CARD`, 96 bytes a slot for the mint's DLEQ proof.
-The `amount` unit follows the keyset — sats for a `sat` keyset, cents for `usd`.
+The `amount` unit follows the keyset: sats for a `sat` keyset and cents for `usd`.
 
-`MAX_PROOFS = 128` is a real constraint on the product, not just the code: a
-Cashu balance is split into powers of two, so 128 slots comfortably holds a
+`MAX_PROOFS = 128` limits both the implementation and the balance a card can
+hold. A Cashu balance is split into powers of two, so 128 slots comfortably holds a
 useful balance but is not unlimited. `cashu-client`'s `splitIntoDenominations`
 takes a `maxSlots` argument for exactly this reason.
 
@@ -140,8 +144,8 @@ takes a `maxSlots` argument for exactly this reason.
 
 - The card keypair is generated **at install time**, on-card, via
   `KeyPair.genKeyPair()`.
-- The private key lives in JavaCard's protected key storage — never in a
-  `byte[]`, never exported, no APDU returns it.
+- JavaCard keeps the private key in protected key storage. The applet never
+  copies it into a `byte[]` or exports it through an APDU.
 - `GET_PUBKEY` returns the 33-byte compressed public key. That is the card's
   identity and the key proofs are locked to.
 - For [NUT-11](https://github.com/cashubtc/nuts/blob/main/11.md), the
@@ -158,8 +162,8 @@ and what the open alternative is.
 A 2.0 payment (`SPEND_ALL_SIGN`) signs in RAM, then commits one byte that burns
 every place it names (with the day's count, the log and the signature kept for
 `SPEND_ALL_AGAIN`), and only then answers; the places' status bytes are marked
-after the commit, or at the next command if the card left the field. No APDU can
-reset a slot to unspent — the command does not exist. `CLEAR_SPENT` zeroes
+after the commit, or at the next command if the card left the field. The card
+exposes no command to reset a slot to unspent. `CLEAR_SPENT` zeroes
 already-spent slots to reclaim space; it does not undo a spend.
 
 Two honest caveats:
@@ -209,14 +213,14 @@ From that moment the proof is only spendable by that card.
 Step 4 is the whole reason the card exists: the signature that unlocks the
 pieces can only be produced by the chip, and only for the swap it was shown.
 
-Note the ordering hazard — **the card burns its places at step 4, before the mint
-has accepted anything at step 5.** That asymmetry is why `cashu-client` refuses
+The ordering hazard is that **the card burns its places at step 4, before the mint
+accepts anything at step 5.** That asymmetry is why `cashu-client` refuses
 locally rather than optimistically submitting; see
 [`DECISIONS.md`](DECISIONS.md#d7).
 
 ## Hardware floor
 
-**JavaCard 3.0.5 or later.** Not a preference — the Schnorr signer computes
+**JavaCard 3.0.5 or later is mandatory:** the Schnorr signer computes
 `k·G` with `KeyAgreement.ALG_EC_SVDP_DH_PLAIN_XY`, a constant that **does not
 exist in the 3.0.4 API**. Verified directly against the SDK jars. JCOP3, J3H145
 and Feitian 3.0.4 parts cannot run this applet at all.

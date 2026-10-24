@@ -1,12 +1,12 @@
 # Foxy card: one PIN, a daily limit, an owner key
 
-> **Merged into cashu-javacard as protocol 2.0 (ENG-673, [DECISIONS D18](DECISIONS.md#d18)).** This
-> document is Foxy's, as it stood at software 1.20, kept for its design and its
-> reasons. On the 2.0 wire the AID is `F0 43 41 53 48 55 43 41 52 44` (not
-> `F0 FOXYCARD`), `SELECT` answers `02 01`, every `FoxyCard/…` label is
-> `CashuCard/…`, and D20 to D26 add to it (the rollover budget and `REFRESH`, the
-> anchored owner, and the fixes). Where this and [`spec/APDU.md`](../spec/APDU.md) differ, the
-> spec is the 2.0 wire.
+> Historical Foxy design, recorded at software 1.20 and incorporated into
+> shared protocol 2.0 ([D18](DECISIONS.md#d18)). The current applet wire is
+> [protocol 2.1](../spec/APDU.md): readers SELECT the full applet AID
+> `F043415348554341524401`, which answers `02 01`. Owner labels use
+> `CashuCard/…`; [D20](DECISIONS.md#d20) through [D26](DECISIONS.md#d26)
+> record the shared protocol changes. Use the current APDU reference when
+> implementing a reader.
 
 The second design of the card's limit, replacing the allowance of
 `FOXY-CARD-SPEC.md` 5.3 (rule 3), 5.6 and 5.7 as they stood in the working
@@ -42,7 +42,9 @@ comes with one, for a phone to read (`GET_DLEQ`) and check (`FOXY-CARD-SPEC.md` 
 The card checks nothing and never uses it; a payment is what it was, and the limits,
 the day and the clock are untouched.
 
-## 0. Why
+<a id="0-why"></a>
+
+## 0. Design rationale
 
 The first limit was on one PIN entry, kept in RAM and reset by `VERIFY_PIN`.
 A terminal that had been handed the PIN sent `VERIFY_PIN` again between
@@ -93,7 +95,9 @@ Not goals: a limit that follows the price rather than the pieces signed
 question); recovery of a lost card (no refund key for now); a clock that is
 exact (a block's time can lead the true time by up to two hours, 5.1).
 
-## 2. Who is trusted with what
+<a id="2-who-is-trusted-with-what"></a>
+
+## 2. Trust boundaries
 
 | Party | Holds | Can do wrong |
 |---|---|---|
@@ -117,8 +121,8 @@ a newer block can end is a bound it cannot walk round (5).
 
 1. **The PIN spends and nothing else.** With the PIN a terminal can `SPEND`
    (up to the day's limit), `LOAD_PROOF` (change written back) and
-   `CLEAR_SPENT`. On a card with an owner the PIN changes nothing else: not the
-   PIN, not the limit, not the record, not the owner. (A card may have no PIN,
+   `CLEAR_SPENT`. On a card with an owner, changing the
+   PIN, limits, record or owner requires the owner's authority. (A card may have no PIN,
    and then it spends without one; a card with a PIN spends up to its no-PIN
    allowance without it. Section 6f.)
 2. **The owner's proof administers.** `CHANGE_PIN`, the owner's `SET_LIMIT`
@@ -144,8 +148,8 @@ a newer block can end is a bound it cannot walk round (5).
    is the rule worked through every command.
 4. **The day is the card's.** The card keeps `now`, the time written in the
    newest Bitcoin block header it has taken (`SET_HEADER`, 5.1). `now` only
-   ever moves forward, and **nothing sets it back**: not `SET_CARD`, not
-   `SET_OWNER`, not a new PIN, not a reset. Up to software 1.14 `SET_CARD` with
+   ever moves forward, and **it stays monotonic** across `SET_CARD`,
+   `SET_OWNER`, PIN changes and reset. Up to software 1.14 `SET_CARD` with
    a different time key cleared it, as the way out of a wrongly signed time.
    There is no signed time now, and so no such way out: a forged header dated
    far ahead would freeze the clock, and what the owner can do then is set the
@@ -155,8 +159,8 @@ a newer block can end is a bound it cannot walk round (5).
    fails closed.
 5. **The window is anchored by the limit, and reset only by a newer block.**
    Setting the limit starts a window at `now`. A `SPEND` that finds `now` a day
-   or more past the window's start begins a new one at `now`. Nothing else
-   begins one: not `VERIFY_PIN`, not a new SELECT, not a reset, not a load. A
+   or more past the window's start begins a new one at `now`. `VERIFY_PIN`, a new SELECT, reset and load preserve the current
+   window. A
    limit set while `now` is still 0 starts a window with no start, which the
    first header taken then anchors (6).
 6. **Refuse before burning; count and burn together.** A piece that would take
@@ -208,7 +212,7 @@ mint and the set flag, and never the limit, the day, `now` or the block fields.
 | no-PIN spent | 4 | **1.16.** What the card has signed for with no PIN since the window began; goes to 0 when the day turns, and with a new number for the allowance. Offset 205. It held what had been signed for in that tap, and was zeros from 1.5 to 1.15 |
 | mint | 1 + up to 80 | the mint's address, as text |
 
-The mint is at most 80 characters, not 96 as it was. The reason is one
+The mint length was reduced from 96 to 80 characters. The reason is one
 command: `SET_CARD` with the owner's proof on a card that has an owner carries a
 proof of up to 72 bytes, 100 bytes of record and the mint, and a short APDU
 holds 255 data bytes in all (1 + 72 + 100 + 80 = 253).
@@ -237,16 +241,17 @@ cost.
 
 ## 5. Time
 
-### 5.1 What the card accepts
+<a id="51-what-the-card-accepts"></a>
+
+### 5.1 Header validation
 
 The card's clock is the time written in the newest Bitcoin block header it has
 taken. `SET_HEADER` (`36`) carries one: the 80 bytes as the network carries
 them, every number little-endian. They are the version (4), the hash of the
 previous block (32), the merkle root (32), the time (4, at byte 68), the
 difficulty as `bits` (4, at byte 72) and the nonce (4). The card does not ask
-who brings it. It believes a header for what it would cost to make, and looks at
-nothing else in it: not the previous block, not the merkle root, not the
-version.
+who brings it. Its trust check covers the work required to produce the header.
+Previous-block linkage, the merkle root and version remain outside that check.
 
 Three checks, in this order. A header that fails one is refused and nothing
 changes:
@@ -297,7 +302,9 @@ On the chip a header is two SHA-256 passes, one over 80 bytes and one over 32,
 and a few compares of 32 bytes: expected to be well under 20 ms. It has not been
 measured (`FOXY-CARD-HARDWARE.md`).
 
-### 5.2 The floor and the quarter, and why those numbers
+<a id="52-the-floor-and-the-quarter-and-why-those-numbers"></a>
+
+### 5.2 Difficulty floor and relative target bound
 
 The card cannot see the network, so it cannot know what a block's work is today.
 It holds a header to two numbers of its own, and they do different jobs.
@@ -369,12 +376,12 @@ where the card is behind it, section 9).
 ### 5.3 The time a terminal tells
 
 `TELL_TIME` (`37`) carries four bytes: the terminal's own clock, seconds,
-big-endian. The card keeps it in RAM for this time in the field (gone with the
-power, not with a SELECT) and writes it into every receipt (6b) and into the log
-entry for the time in the field (6b) as they are made, zeros where none was
-told. A log entry takes the told time as it stands when the entry is begun, by
-the first thing in the time in the field that is written down; a receipt, when
-its payment is signed. So a terminal tells the time first.
+big-endian. The card keeps it in RAM for this time in the field (retained across
+SELECT and cleared on power loss) and writes it into every receipt (6b) and into
+the log entry for the time in the field (6b) as they are made, zeros where none
+was told. A log entry takes the told time as it stands when the entry is begun,
+by the first thing in the time in the field that is written down; a receipt,
+when its payment is signed. So a terminal tells the time first.
 
 It is trusted for nothing. It is not the day and it is not any limit, nothing on
 the card is judged by it, and no key, PIN or state of the card refuses it. It is
@@ -433,7 +440,7 @@ a card's life, and only for a card that was spent from before it had been shown 
 block. A phone with a route shows its card a block at the first tap where the
 card is behind (section 9), which closes it.
 
-**It counts what leaves the card, not the price paid.** From software 1.12 a
+**Counted value.** The limit charges the value leaving the card. From software 1.12 a
 payment's change is the card's own (`SPEND_ALL_CHANGE`, 6d): outputs the card
 builds and locks to its own key, which no terminal can take, so the day is
 charged the pieces less that change, and a 300-sat payment made with one
@@ -483,8 +490,8 @@ chooses when to show it. A limit that asks no clock has nothing to walk
 forward.
 
 **The rule.** With a limit of `L` sats and a payment of which `S` sats leave
-the card for good — the pieces named at `SPEND_ALL_BEGIN`, less the change the
-card makes for itself (`SPEND_ALL_CHANGE`, software 1.12; section 6d) — worked
+the card for good, the pieces named at `SPEND_ALL_BEGIN`, less the change the
+card makes for itself (`SPEND_ALL_CHANGE`, software 1.12; section 6d), worked
 out at the first `SPEND_ALL_SIGN`, when the change is known, and shaped
 (software 1.13) so that whoever holds the card can feel that a payment was over
 the limit:
@@ -499,8 +506,8 @@ payment over the limit takes the same time in the hand with change as without,
 and what is felt says how far over the limit it was, which a terminal cannot
 shorten by asking for change outputs: each costs the holder's hand what it
 takes off. (1.13 took one wait off for every output, more than an output costs,
-and a terminal could buy the wait down with outputs of a sat.) That change is
-coming is the phone's to say, not the card's: the till's phone buzzes three
+and a terminal could buy the wait down with outputs of a sat.) The phone indicates that
+change is due: the till's phone buzzes three
 times as the first tap ends with change owed. "Within `L`" is `S ≤ L +
 L/32`: a limit set in another money is so many sats at one moment and a price
 in that money so many at another, so a payment of exactly the limit lands a
@@ -514,8 +521,8 @@ counted four signatures for every limit's worth, a part counting as one;
 before 1.12 the first `L` was free and the pieces were counted whole.)
 
 **One payment a tap at full speed.** A second payment signed in the same time
-in the field waits as one over the limit does — about seven seconds, and three
-more for every limit's worth of it — whether or not there is a limit, unless
+in the field waits as one over the limit does, about seven seconds, and three
+more for every limit's worth of it, whether or not there is a limit, unless
 the owner's grant (`ALLOW_LOAD`) is in the tap. A terminal that holds the PIN
 could otherwise take a limit's worth a second for as long as the card is held,
 each payment signed at once; now each costs it seven seconds, or a fresh tap,
@@ -555,7 +562,7 @@ leaves the card about as fast as an honest payment of that size would, so
 that a card lifted when the payment ought to be over has lost about what it
 ought to have paid.
 
-The wait is charged on what leaves the card, not on the price: the pieces,
+The wait is charged on the value leaving the card: the pieces,
 less the change the card makes for itself (6d; before 1.12 the pieces whole,
 since change a terminal writes back is not something the card can check). A wallet
 that wants the card held no longer than it must chooses the pieces that
@@ -618,7 +625,7 @@ the limit on one payment, and was waited for (6a), says so: bit 1 of its flags. 
 begin again shows as more taps, and the counts count every one, so the ring
 being pushed round hides nothing from a phone that remembers the counts it saw.
 
-**It records what was signed for, not the price.** The card does not know the
+**Recorded value.** The log records the signed amount. The card does not know the
 price. It cannot say that a payment was too much; it says what left, and when.
 
 **The mark.** A terminal that keeps to the limits is never refused: `GET_INFO`
@@ -1159,7 +1166,9 @@ labels, nonce and all. (Up to software 1.14 the time signature had no such
 fallback and had to verify. There is none now, and the owner's proof is the one
 thing the verifier is for.)
 
-### 7.3 Who is the owner
+<a id="73-who-is-the-owner"></a>
+
+### 7.3 Owner custody
 
 Whoever's words derived the key on the card. For a holder with a phone, their
 own. For a holder without one, the friend whose phone set the card up: a trustee
@@ -1353,16 +1362,16 @@ second tap. That tap used to need the PIN again, for one payment, which is
 cumbersome at a counter.
 
 **The rule.** The card keeps one bit in permanent memory, *change due*, set
-by every `SPEND_PROOF` in the same transaction that burns the slot. At the
-next `SELECT`, whichever reader's it is, the bit is taken into the tap (a
-transient *change grant*) and cleared; a card pulled between the two still has
-the bit, and the tap after gets the grant instead. For that one tap,
-`LOAD_PROOF` and `CLEAR_SPENT` need no verified PIN, exactly as under
-`ALLOW_LOAD`. Nothing else opens: not a spend, not the PIN, not the record,
-not the limit, not the lock. A locked card still takes no load; a blocked PIN
-still waives nothing (`requireLoadAuthority` asks for a PIN that is set, and
-a blocked one is not). A payment in the change tap, which needs the PIN as any
-payment does, sets the bit again for the tap after it.
+by every `SPEND_PROOF` in the same transaction that burns the slot. At the next
+`SELECT`, whichever reader's it is, the bit is taken into the tap (a transient
+*change grant*) and cleared; a card pulled between the two still has the bit,
+and the tap after gets the grant instead. For that one tap, `LOAD_PROOF` and
+`CLEAR_SPENT` need no verified PIN, exactly as under `ALLOW_LOAD`. Spending,
+PIN, record, limit and lock commands retain their existing gates. A locked card
+still takes no load; a blocked PIN still waives nothing (`requireLoadAuthority`
+asks for a PIN that is set, and a blocked one is not). A payment in the change
+tap, which needs the PIN as any payment does, sets the bit again for the tap
+after it.
 
 `GET_INFO`'s last byte says whether this tap has the grant, so the phone can
 tell before it writes.
@@ -1385,7 +1394,9 @@ PIN pad comes up for the next tap. The screen says `No PIN is needed.` on the
 TAP THE CARD AGAIN card. Pieces owed for a top-up cut short are written as
 before, with the PIN or the owner's proof.
 
-## 9. What the phone does
+<a id="9-what-the-phone-does"></a>
+
+## 9. Phone responsibilities
 
 **The clock.** The card cannot look at the network, so the phone does. It
 fetches the newest block header over Tor from two independent sources
@@ -1535,7 +1546,9 @@ run against a fake native side that holds the same derivation;
 the money suites gain a day that turns and a terminal that re-sends the PIN and
 gets one day; a test checks that the page never receives an owner secret.
 
-## 10. Set-up, and what is said
+<a id="10-set-up-and-what-is-said"></a>
+
+## 10. Setup and holder notices
 
 - A card is set up on a card with no owner, by the phone that will be its owner.
   The set-up asks for a PIN twice, or for none (1.16: a card with no PIN pays
@@ -1607,19 +1620,19 @@ it; "`VERIFY_PIN` changes nothing about spending"; `SET_CARD` never touching the
 limit.
 
 **Changed:** the allowance becomes a **daily limit** with a window (section 6);
-`0` means **no limit** again, not nothing, and is the default; the owner secret
-becomes an owner **key** (65 bytes, uncompressed, P-256; the proof is a DER ECDSA
-signature the card verifies, not a hash it compares; nothing of the owner crosses
-the air, and the key never leaves native code); `CHANGE_PIN` takes the proof and
-the new PIN only (**no old PIN, no session**) and resets the tries; `SET_OWNER`
-works on a card with no owner while it is empty, and on a card with an owner only
-with that owner's proof, and only while it is empty, replacing the owner;
-`SET_PIN` works on a card with no owner while it is empty, replacing a PIN, and
-not at all on a card with an owner; `SET_CARD` needs the owner's proof on a card
-with an owner; `33` returns as `SET_LIMIT` by PIN, **for a card with no owner,
-while it is empty**; `SET_CARD` carries the time key; the mint is at most 80
-characters; `GET_INFO` grows by twelve bytes and `GET_CARD` by sixty-five;
-version 1.1, format 3.
+`0` defaults to **no limit**, allowing unrestricted value under this setting;
+the owner secret becomes an owner **key** (65 bytes, uncompressed, P-256; the
+proof is a DER ECDSA signature verified by the card; nothing of the owner
+crosses the air, and the key never leaves native code); `CHANGE_PIN` takes the
+proof and the new PIN only (**no old PIN, no session**) and resets the tries;
+`SET_OWNER` works on a card with no owner while it is empty, and on a card with
+an owner only with that owner's proof, and only while it is empty, replacing the
+owner; `SET_PIN` works on a card with no owner while it is empty, replacing a
+PIN, and not at all on a card with an owner; `SET_CARD` needs the owner's proof
+on a card with an owner; `33` returns as `SET_LIMIT` by PIN, **for a card with
+no owner, while it is empty**; `SET_CARD` carries the time key; the mint is at
+most 80 characters; `GET_INFO` grows by twelve bytes and `GET_CARD` by
+sixty-five; version 1.1, format 3.
 
 **Dropped:** the allowance that only goes down and only the owner raises; the
 rule that a card with no owner can never be given an allowance, and the card
@@ -1642,7 +1655,9 @@ loaded, may be given a limit and spends its first day on trust (6); `6A93` means
 little work, and `6A92` is unused; a log entry is twenty bytes and a receipt
 seventy-seven; the flag for a clock moved twice in a tap is never set.
 
-## 12. How it is tested
+<a id="12-how-it-is-tested"></a>
+
+## 12. Verification
 
 - jCardSim, the day: a limit of one piece and four pieces on the card, and a
   terminal that sends the PIN between every spend, takes one, however it is
@@ -1754,7 +1769,9 @@ seventy-seven; the flag for a clock moved twice in a tap is never set.
   permanent write per spend (spent today, with the status byte and, on a new day,
   the window start) against the chip's write endurance.
 
-## 13. What it does not protect against
+<a id="13-what-it-does-not-protect-against"></a>
+
+## 13. Residual risks
 
 - **A terminal built to cheat is bound by the day.** It cannot start another by
   telling the card it is later: the card's clock is the newest block header it
@@ -1812,13 +1829,15 @@ seventy-seven; the flag for a clock moved twice in a tap is never set.
   and signed for again, by a terminal that has the PIN. A signature that was handed
   over has already been paid for in full.
 - A holder with no phone has no balance they can read that a terminal did not draw.
-  That is a screen, not a clock.
+  That screen displays the stored values; clock validation follows the header rules.
 - Whoever has the owner's words and the card in hand has everything on it.
 - A holder whose owner has lost their words can never change the PIN or the limit.
 - The PIN is in the clear over a few centimetres of air until phase 2.
 - A lost card is cash gone; there is no refund key for now.
 
-## 14. Decided, and left
+<a id="14-decided-and-left"></a>
+
+## 14. Decisions and remaining work
 
 Decided: no limit by default and none asked at set-up (A8); no loading of a card
 with no owner (A2); the owner's phone adds funds without the PIN (A3); the owner

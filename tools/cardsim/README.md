@@ -90,7 +90,7 @@ is now. Anything the applet would refuse because of the fixture's own shape is a
 
 - `pin`: 4 to 8 characters. `blockedPin` needs `pin`.
 - `mint`: 1 to 77 ASCII characters. `refundKey` needs `mint`, and must start `02` or `03`.
-- `owner` or `ownerKey`, not both. On a card whose owner the bridge does not hold, `/reset` first.
+- `owner` and `ownerKey` are mutually exclusive. On a card whose owner the bridge does not hold, `/reset` first.
 - `anchor` needs an owner in the same fixture. Each header is exactly 80 bytes.
 - `proofs`: at most 128, no repeated `nonce`, `C` starting `02` or `03`, `1 ≤ amount < 2^32`.
   A dated piece (`date` ≠ 0) needs a refund key. Proofs need a record (`mint` here or

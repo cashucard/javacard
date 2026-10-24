@@ -1,11 +1,19 @@
-# What the chip has room for
+<a id="what-the-chip-has-room-for"></a>
+
+# Foxy card hardware constraints
+
+These observations cover the Foxy 1.x and shared 2.x applets identified in
+each section. Use the [deployment guide](HARDWARE_DEPLOYMENT.md) for the
+current package, AIDs and pinned artifact.
 
 Foxy's card runs on an NXP J3R180 (JCOP 4, Java Card 3.0.5, 180 KB of
 storage). The simulator the tests run in (jCardSim) has none of the limits
 below, so each was found on the chip, usually the hard way. Each is given
 with what was measured and what the card's software does about it.
 
-## The first applet instantiated from a package must be small
+<a id="the-first-applet-instantiated-from-a-package-must-be-small"></a>
+
+## First-instance installation budget
 
 The card goes mute, or answers `6F00`, at the INSTALL that both instantiates
 its package for the first time and runs `CashuApplet`'s constructor, which
@@ -52,7 +60,9 @@ the package. The chip refuses to delete an instance that a static field of the
 package refers to, so none does (the tag asks the card's applet for a shareable
 interface at each selection and keeps nothing of it).
 
-## The load file's size decides whether the applet installs, and the rule is not known
+<a id="the-load-files-size-decides-whether-the-applet-installs-and-the-rule-is-not-known"></a>
+
+## Load-file size and installation results
 
 With the opener in place, whether the card's applet installs still turns on
 the load file's size, and not in one direction. Five builds of one version
@@ -111,7 +121,9 @@ tried yet. A size not tried yet is tried on the chip with
 `~/.foxycard/install-try.sh`, and the answer is added to the table. A
 version is shipped at a size that installed.
 
-## A constructor may ask for little more; the rest is asked for after the install
+<a id="a-constructor-may-ask-for-little-more-the-rest-is-asked-for-after-the-install"></a>
+
+## Constructor allocation budget
 
 The budget that makes the first applet small (above) is charged with what the
 constructor makes, and it is small. What was measured on the chip, in the
@@ -140,7 +152,9 @@ that (`ProofStoreCheck.java`, run by `proofstore.sh`): it sets a blank card up, 
 piece with a proof and reads it back, loads a plain piece and reads `00`, pays, and
 resets the card, which ends blank.
 
-## One transaction holds about a dozen status bytes
+<a id="one-transaction-holds-about-a-dozen-status-bytes"></a>
+
+## Transaction capacity
 
 A payment of 6 to 11 pieces was burned inside one transaction; 32 pieces
 were refused with `6A96` (`TransactionException`, nothing burned). The
@@ -232,11 +246,13 @@ by the applet, about 50 ms a reduction in bytecode) and the chip's generic
 mapping for the point addition. Measured through the contact reader with the
 live suite: a change output (`SPEND_ALL_CHANGE`) takes 300 ms when the first
 x is on the curve and about 110 ms more for each further round of the hash to
-the curve — 410 ms on average, 860 at the worst seen; `GET_CHANGE` 110 ms a
+the curve, 410 ms on average, 860 at the worst seen; `GET_CHANGE` 110 ms a
 page. None of it is a bytecode multiply, which at 242 ms apiece is what rules
 out doing the field's arithmetic in software.
 
-## The reader, when the card goes mute
+<a id="the-reader-when-the-card-goes-mute"></a>
+
+## Reader recovery after a mute card
 
 The ACR39U's block waiting time is about 1.4 s. A card that stops
 answering shows as `SCARD_E_NOT_TRANSACTED` after about 7.2 s (five

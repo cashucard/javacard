@@ -1,15 +1,15 @@
 # Design decisions
 
-Each entry records a call that was made, what was rejected, and why. If you are
-about to change one of these, read the entry first — most were made against a
-real alternative, and several were made *after* getting it wrong once.
+Each entry records a decision, the rejected alternatives and the reason. Read
+the relevant entry before changing the product. Most decisions followed
+consideration of real alternatives, and several followed an earlier mistake.
 
 Anchors are stable (`#d1` … `#d26`); other docs link to them. D15 and D16
 are superseded by the 2.0 merge ([D18](#d18)) and kept for the record.
 
 ---
 
-## <a id="d1"></a>D1 — Cashu ecash, not BoltCard
+## <a id="d1"></a>D1: Cashu ecash is the payment protocol
 
 **Rejected:** NTAG 424 DNA + AES-128 CMAC, per **FIP-04 (Implemented)**.
 
@@ -29,12 +29,12 @@ decommissioned as a result (ENG-176).
 
 ---
 
-## <a id="d2"></a>D2 — No cardholder identity, ever
+## <a id="d2"></a>D2: Cards carry no cardholder identity
 
 **Rejected:** name, card number, PIN-on-spend by default, remote freeze, recovery.
 
 The card is cash. Each of those features is individually reasonable and
-collectively turns the product into a debit card with extra steps — at which
+collectively turns the product into a debit card with extra steps. At that
 point Flash is custodial again and the reason to exist is gone.
 
 This is why the physical card says **"BEARER CARD"** rather than leaving the
@@ -47,13 +47,13 @@ sign-off.
 
 ---
 
-## <a id="d3"></a>D3 — The card does no BDHKE
+## <a id="d3"></a>D3: BDHKE stays on the host
 
 **Rejected:** blinding/unblinding on-card.
 
 JavaCard has no big integers, no `long`, and no garbage collector. Implementing
 blinding on-card would multiply applet size and attack surface to protect
-something that is not secret — and the host must know the blinding factor `r`
+something public; the host must know the blinding factor `r`
 anyway in order to unblind.
 
 The card holds the one thing that genuinely cannot live elsewhere: a private key
@@ -62,10 +62,10 @@ the host.
 
 ---
 
-## <a id="d4"></a>D4 — Proofs are P2PK-locked to the card key (NUT-11)
+## <a id="d4"></a>D4: Proofs are P2PK-locked to the card key (NUT-11)
 
 Without this, reading a card's memory would be equivalent to stealing its
-balance — the proofs would be spendable by whoever copied them.
+balance; whoever copied the proofs could spend them.
 
 With [NUT-11](https://github.com/cashubtc/nuts/blob/main/11.md), a proof is
 locked to a public key whose private half exists only inside the chip. A
@@ -77,7 +77,7 @@ key *before* minting: the lock is applied at issuance, not afterwards.
 
 ---
 
-## <a id="d5"></a>D5 — No seed, no backup, no recovery
+## <a id="d5"></a>D5: Card spending keys have no recovery path
 
 **Rejected:** BIP-39 seed derivation for the card key.
 
@@ -88,8 +88,8 @@ credential and the chip stops being the security boundary.
 **This is the most-questioned decision, and the counter-proposal is good.**
 [PR #4](https://github.com/cashucard/javacard/pull/4) proposed using NUT-11's
 existing `refund` + `locktime` tags so a lost card's proofs can be swept to a
-recovery key after a timeout — no applet key changes, no seed. It is the right
-shape. It was closed unmerged on 2026-10-02, because it was written before
+recovery key after a timeout. The proposal preserves the applet key and requires
+no seed. It was closed unmerged on 2026-10-02 because it was written before
 v0.2.0 and no longer applies, and because of a specific flaw: in NUT-11, once
 locktime passes the *card's own key stops being valid*, so a short locktime
 silently converts the card into a brick; and the card cannot enforce a timeout
@@ -104,12 +104,12 @@ If you want to solve recovery, start from that PR and that objection.
 
 ---
 
-## <a id="d6"></a>D6 — JavaCard 3.0.5 is a hard floor
+## <a id="d6"></a>D6: JavaCard 3.0.5 is a hard floor
 
 The Schnorr signer computes `k·G` using
 `KeyAgreement.ALG_EC_SVDP_DH_PLAIN_XY`. That constant **was introduced in
-JavaCard 3.0.5 and does not exist in 3.0.4** — verified by inspecting the SDK
-jars directly, not by reading a datasheet.
+JavaCard 3.0.5 and does not exist in 3.0.4**. I verified this by inspecting the
+SDK jars directly; the datasheet was not used.
 
 This invalidated the project's own prior documentation, which named Feitian
 3.0.4 as the primary target and JCOP4 as a fallback. Every external
@@ -120,7 +120,7 @@ applet at all. Confirm the platform version in writing before buying a tray.
 
 ---
 
-## <a id="d7"></a>D7 — The client refuses locally rather than letting the mint refuse
+## <a id="d7"></a>D7: Client checks prevent mint-side rejection
 
 `meltProofs` and `swapProofs` validate a proof's NUT-11 witness **before**
 submitting, and return an error rather than forwarding a request the mint would
@@ -134,7 +134,7 @@ meltProofs   → mint accepts or rejects                            ← too late
 ```
 
 By the time a terminal is assembling a melt, **the card has already burned its
-slot**. A mint-side rejection is not free — it costs the proof. Failing locally
+slot**. A mint-side rejection costs the proof. Failing locally
 leaves it intact.
 
 The same reasoning drives `selectProofsForMelt` returning `null` rather than a
@@ -143,25 +143,24 @@ short selection, and the local witness check honouring `sigflag` and `n_sigs`:
 
 ---
 
-## <a id="d8"></a>D8 — Melt and swap are not idempotent, and the API says so
+## <a id="d8"></a>D8: Melt and swap operations require state checks before retry
 
 There is no request-id or retry token. Inputs are consumed the moment the mint
 accepts them, so a lost response is genuinely ambiguous.
 
 The library does not paper over this. It documents that after a lost response
-the correct move is `getMeltQuoteState` or `checkProofStates` — **never a
-retry** — because a retry against a `PENDING` quote is how the same invoice gets
-paid twice.
+the correct move is `getMeltQuoteState` or `checkProofStates`. Do not retry a
+`PENDING` quote, because that can pay the same invoice twice.
 
 Related: `allProofsUnspent` returns `"UNSPENT" | "NOT_UNSPENT" | CashuMintError`
-rather than a boolean. A boolean union fails open — `CashuMintError` is a truthy
+rather than a boolean. A boolean union fails open: `CashuMintError` is a truthy
 object, so `if (await allProofsUnspent(...))` would read a mint timeout as
 "safe to accept", inverting the double-spend check. This was a real bug, caught
 in review.
 
 ---
 
-## <a id="d9"></a>D9 — BIP-340 *default* signing, with auxiliary randomness
+## <a id="d9"></a>D9: BIP-340 *default* signing, with auxiliary randomness
 
 **Rejected:** a deterministic nonce derived purely from `(d, msg)`.
 
@@ -178,14 +177,14 @@ be replayed against the card.
 
 ---
 
-## <a id="d10"></a>D10 — Every buffer is allocated once, at install time
+## <a id="d10"></a>D10: Every buffer is allocated once, at install time
 
 JavaCard Classic allocates `new` in **persistent EEPROM** and never collects it.
 An allocation on the signing path is a permanent leak.
 
 The original signer allocated 288 bytes per `sign()` call. A card would have run
 out of persistent memory after a few hundred taps and been **permanently dead
-for spending** — recoverable only by deleting the applet instance, which
+for spending**. Recovery requires deleting the applet instance, which
 destroys the stored proofs.
 
 jCardSim cannot surface this: it runs on the JVM, with a heap and a garbage
@@ -196,7 +195,7 @@ The general lesson, which applies to every change in `applet/`: *a passing
 simulator suite is not evidence about silicon.*
 
 **One exception, since software 1.20 ([D17](#d17)):** the 12,288 bytes that hold
-the mint's proofs are reserved by the first `SET_CARD`, not at install, because
+the mint's proofs are reserved by the first `SET_CARD`. This happens after install because
 the chip will not install an applet whose constructor asks for that much more.
 The scan lets through that one statement and nothing beside it: it is guarded so
 that it happens once in a card's life (`if (dleq == null)`), and a request the
@@ -206,16 +205,15 @@ the same statement in any other method are each still refused.
 
 ---
 
-## <a id="d11"></a>D11 — DLEQ is verified client-side, and unlinkability is not assumed
+## <a id="d11"></a>D11: DLEQ is verified client-side, and unlinkability is not assumed
 
 A mint could sign one user's outputs with a key unique to them and recognise
 those proofs on redemption, breaking the unlinkability that is the point of
 ecash. [NUT-12](https://github.com/cashubtc/nuts/blob/main/12.md) DLEQ proves
 the signature used the *published* key.
 
-It is verified in `cashu-client`, in local arithmetic, with no mint contact —
-which is what lets an **offline terminal** check a tap on arithmetic rather than
-on faith.
+`cashu-client` verifies DLEQ with local arithmetic, so an **offline terminal**
+can check a tap without contacting the mint.
 
 The mint is trusted for solvency. It is explicitly *not* trusted for
 unlinkability.
@@ -226,13 +224,13 @@ nothing: the verification is the reader's, as above.
 
 ---
 
-## <a id="d12"></a>D12 — No PIN on spending, in the base profile (SUPERSEDED by D13)
+## <a id="d12"></a>D12: The base profile has no PIN check on spending (SUPERSEDED by D13)
 
 `SPEND_PROOF` requires no authentication. `LOAD_PROOF`, `CLEAR_SPENT` and
 `LOCK_CARD` are PIN-gated; spending is not.
 
 That is bearer semantics: possession authorises payment, as with a banknote. It
-is also the design's sharpest edge — **a hostile reader in range can drain a
+is also the design's sharpest edge: **a hostile reader in range can drain a
 card**, and the spec's Profile B+ (PIN-gated spending) is written but not
 implemented.
 
@@ -242,7 +240,7 @@ finding that covers the current Flashcard's re-link gap (ENG-209).
 
 ---
 
-## <a id="d13"></a>D13 — PIN-gated spending on personalised cards (supersedes D12)
+## <a id="d13"></a>D13: PIN-gated spending on personalised cards (supersedes D12)
 
 `SPEND_PROOF` and `SIGN_ARBITRARY` are PIN-gated **when a PIN is set**;
 `VERIFY_PIN` in the same NFC session authorises both. `LOAD_PROOF`,
@@ -250,22 +248,22 @@ finding that covers the current Flashcard's re-link gap (ENG-209).
 without a PIN keep the D12 tap-and-go behaviour.
 
 This resolves the open decision D12 deferred (Profile B+; ENG-209): the pilot
-chose Visa-style authorisation — possession **and** knowledge authorise
-payment — because a hostile reader in the D12 model could drain a card it was
-presented, and because POS cards now ship PIN-set by default.
+chose Visa-style authorisation because possession **and** knowledge authorise
+payment. A hostile reader in the D12 model could drain a card presented to it.
+POS cards now ship PIN-set by default.
 
 Why `SIGN_ARBITRARY` is gated with it: the signature is a spend authorisation
 under the card's key (it is the recovery path's witness material), so an
-unverified session must not be able to mint one — otherwise the spend gate is
+unverified session must not be able to mint one. Otherwise the spend gate is
 theatre.
 
 Burn ordering is unaffected: the gate is the first statement of the spend
-handler, so a wrong or missing PIN throws `6982` **before** the slot burn —
-no proof is consumed on a failed authorisation.
+handler, so a wrong or missing PIN throws `6982` **before** the slot burn.
+Failed authorisation consumes no proof.
 
 **Lockout semantics (pilot):** `PIN_MAX_TRIES` (3) exhausted → `6983`, the
 card's PIN-verified operations are dead, and there is **no unblock path** in
-this profile — a blocked card is replaced at re-provisioning. An
+this profile; a blocked card is replaced at re-provisioning. An
 `UNBLOCK_PIN` command gated by a provisioning PUK is the designated follow-up
 **before volume issuance**; do not ship consumer cards at scale without it.
 
@@ -277,7 +275,7 @@ one without a PUK still is, and the lockout paragraph above describes it.
 gate checked `pinState == 1`, and a blocked card has `pinState == 2`, so
 exhausting the tries **removed** the gate: every PIN-gated command opened up
 to whoever held the card, while `VERIFY_PIN` and `GET_INFO` kept reporting it
-blocked. `CHANGE_PIN` had the mirror bug — its failed checks decremented the
+blocked. `CHANGE_PIN` had the mirror bug: its failed checks decremented the
 counter without ever setting `pinState`, leaving a card that reported "set"
 but could never verify. And no failed check ended the session, so a session
 that had verified stayed verified through later wrong PINs, including the
@@ -312,7 +310,7 @@ PIN off again ([D15](#d15)), so the terminal reads `pinState` on every tap.
 
 ---
 
-## <a id="d14"></a>D14 — A slot's status byte is its commit, written last
+## <a id="d14"></a>D14: A slot's status byte is its commit, written last
 
 A proof slot is `status ‖ keyset ‖ amount ‖ nonce ‖ C`, and every reader trusts
 the status byte: `GET_BALANCE` sums the UNSPENT slots and `SPEND_PROOF` signs
@@ -372,7 +370,7 @@ fails it ([`HARDWARE_DEPLOYMENT.md`](HARDWARE_DEPLOYMENT.md#install)).
 
 ---
 
-## <a id="d15"></a>D15 — A holder can take the PIN off a personalised card (qualifies D13; SUPERSEDED by D18)
+## <a id="d15"></a>D15: A holder can take the PIN off a personalised card (qualifies D13; SUPERSEDED by D18)
 
 > **Superseded in 2.0 ([D18](#d18)).** `CLEAR_PIN` is gone with the 0.x wire.
 > On the shared protocol the owner key is the authority above the PIN: the
@@ -381,7 +379,7 @@ fails it ([`HARDWARE_DEPLOYMENT.md`](HARDWARE_DEPLOYMENT.md#install)).
 `CLEAR_PIN` (`0x43`, applet 0.5) removes the PIN from a card that has one.
 The card goes back to where `SET_PIN` found it: `pinState` 0, a fresh try
 counter, every gated command open with no PIN, `VERIFY_PIN` answering `6984`,
-and `SET_PIN` allowed again. D13 stays the default — POS cards still ship
+and `SET_PIN` allowed again. D13 stays the default. POS cards still ship
 PIN-set, and nothing but this command, sent by someone who has verified the
 PIN in the same session and presents it again, takes a PIN off. This adds an
 explicit, PIN-authenticated way out; it does not reopen D12.
@@ -390,7 +388,7 @@ Why a holder wants it: the card is cash ([D2](#d2)), and the PIN is the
 holder's choice of how much that cash should behave like a banknote. A card
 handed to someone else, a small-balance card for a tap-and-go merchant, a
 card whose holder decides the D13 prompt costs more than the D12 exposure
-it closes — each is the holder's call, on their own money, and before 0.5
+it closes; each is the holder's call, on their own money, and before 0.5
 the only route was a reinstall, which regenerates the card key and strands
 the balance ([D5](#d5)). An owner who can set a PIN and cannot remove it is
 holding a card with a feature they cannot turn off.
@@ -414,15 +412,15 @@ holding a card with a feature they cannot turn off.
   command must not cross. State 2 is reached by three unauthenticated APDUs
   from any reader in range; a `CLEAR_PIN` that took a blocked card to state
   0 would be the unblock path D13 says does not exist, handed to whoever
-  blocked it — three wrong PINs, then a clear, then a spend. The gate is
+  blocked it: three wrong PINs, then a clear, then a spend. The gate is
   `requirePinVerified`, which a blocked card can never pass, so state 2
   answers `6982` with the right PIN, in this session and the next. The test
   for it sends exactly that sequence. The stranded-balance problem ([D13](#d13),
   [SECURITY-MODEL #14](SECURITY-MODEL.md)) was `UNBLOCK_PIN` + PUK's
-  (ENG-617) to solve, not this command's; [D16](#d16) solves it.
+  (ENG-617) belongs to D13's recovery path, documented in [D16](#d16).
 
-The write is one byte: `pinState` to 0, after the check — the byte `SET_PIN`
-writes last, the other way. The JCRE writes a byte atomically, so a card pulled
+After the check, `CLEAR_PIN` sets `pinState` to 0. `SET_PIN` writes that byte
+last, the other way. The JCRE writes a byte atomically, so a card pulled
 mid-command is PIN-set or it is not; there is no state between. The try
 counter needs no write of its own: `OwnerPIN.check`'s contract is that a
 match sets the validated flag and resets the tries remaining, so the
@@ -433,17 +431,17 @@ the counter at its limit, and the card leaves as `SET_PIN` found it with
 *Corrected before merge:* the first draft followed the byte with
 `OwnerPIN.resetAndUnblock()` inside a `JCSystem` transaction and described
 the order of the two as load-bearing, as [D14](#d14)'s is. It was not. The
-reset re-filled a counter the check had already filled, so neither tear it
-guarded against — state 0 over a stale counter, state 1 over a fresh one —
-could happen; the "fresh counter" is one the holder had already earned by
-verifying. A write order documented as a guarantee when it is not is worse
+reset refilled a counter the check had already filled. The tear review showed
+state 0 over a stale counter and state 1 over a fresh one could happen; the
+"fresh counter" is one the holder had already earned by
+verifying. A write order documented as a guarantee without evidence is worse
 than none, since the next change protects the wrong thing, so both calls
 went and `ClearPinTest` now scans for the opposite: the check precedes the
 write, and the state byte is the only persistent write. The test still sets
 `pinState` 0 over a partly spent counter and shows nothing reads it
 (`VERIFY_PIN` stops at `6984`; the next `SET_PIN`'s `OwnerPIN.update`
 starts its PIN at the full count), as a property of state 0 the applet must
-keep, not a state `CLEAR_PIN` can leave.
+keep. `CLEAR_PIN` must not leave the card in that state.
 
 Readers: `pinState` 1 is no longer a one-way state, so a terminal reads
 `GET_INFO` byte 7 on every tap rather than remembering a card as PIN-set.
@@ -455,19 +453,19 @@ set.
 The applet version moved to 0.5: a new instruction and a new capability bit
 are wire-visible, and a 0.4 card answers `0x43` with `6D00`. A 0.4 card is
 not vulnerable and need not be reinstalled; it lacks the feature. 0.5 is a
-fresh install (delete + install, sweep first), as every applet version is —
+fresh install (delete + install, sweep first), as every applet version is:
 there is no in-place upgrade.
 
 ---
 
-## <a id="d16"></a>D16 — A provisioning PUK unblocks the PIN (resolves D13's lockout; SUPERSEDED by D18)
+## <a id="d16"></a>D16: A provisioning PUK unblocks the PIN (resolves D13's lockout; SUPERSEDED by D18)
 
 > **Superseded in 2.0 ([D18](#d18)).** The PUK is gone with the 0.x wire. A
 > blocked card is unblocked by the owner's proof (`CHANGE_PIN`, which needs no
 > old PIN), from the holder's phone. The entry below is the 0.6 record.
 
 `SET_PUK` (`0x44`) gives a card a PUK, once, at personalisation. `UNBLOCK_PIN`
-(`0x45`) replaces the PIN — blocked or forgotten — on presentation of that
+(`0x45`) replaces the PIN, whether blocked or forgotten, on presentation of that
 PUK, with no session and without consuming it. Applet 0.6, capability bit 4,
 GET_INFO byte 8 for the PUK state (0 unset, 1 set, 2 exhausted). This is the
 follow-up D13 named before volume issuance: three unauthenticated APDUs no
@@ -498,20 +496,20 @@ and is refused on a blocked card in every session, because the session gate
 is one a blocked card never passes. Without that, a reader in range could
 attach a PUK of its own to a personalised card, block the PIN with three
 guesses, and unblock it with the PUK it chose; or block first and attach
-second. A PUK is set once: not changed, not replaced, not re-armed.
+second. The PUK has a one-time setup operation. The card does not allow replacing or rearming it.
 
 **Ten tries, then terminal.** The PUK is 8–12 digits, longer than the PIN
 because it is the credential that replaces the PIN, and it has ten tries
-because it is presented by a tool from a registry, not typed at a POS, so a
-slip is cheap and a guess still has at most ten attempts at 10^8 or more
+because it is presented by a registry tool rather than typed at a POS. A
+registry-entry slip is inexpensive and a guess still has at most ten attempts at 10^8 or more
 ([SECURITY-MODEL #15](SECURITY-MODEL.md)). A wrong PUK answers `63 CX` with
 the PUK tries left; the exhausting try answers `63 C0` (not `6983`, so a
 reader counting down sees zero) and sets byte 8 to 2, after which
 `UNBLOCK_PIN` is `6983` for good and `SET_PUK` is `6A89`. Exhaustion costs
-the recovery path, not the balance: a card whose PUK was guessed at ten
+recovery but leaves the balance intact. A card whose PUK was guessed at ten
 times is a 0.5 card, stranded only if its PIN is then blocked. The
-alternative — `SET_PUK` allowed again after exhaustion, in a verified
-session — was rejected because the card cannot tell the holder re-arming
+alternative, allowing `SET_PUK` again after exhaustion in a verified session,
+was rejected because the card cannot tell the holder re-arming
 their own card from the thief who exhausted the PUK and then guessed the
 PIN; a terminal state at least tells the holder, through byte 8, that this
 card should be swept and replaced.
@@ -530,14 +528,15 @@ with a different gate. One command per transition.
 - *Unblocking on the verified session, or `CHANGE_PIN` from a blocked
   state.* A blocked card grants no session; that is D13 and ENG-615. The
   PUK is a second credential precisely because the first is gone.
-- *`UNBLOCK_PIN` opening a session.* It proves the PUK, not the new PIN. The
+- *`UNBLOCK_PIN` opening a session.* It proves only the PUK. The
   holder's first `VERIFY_PIN` with the new PIN is the first time that PIN is
   known to work, and a terminal that got a session from the registry's
   credential rather than the holder's would be spending on the registry's
   authority.
 - *`pin.resetAndUnblock()` before `pin.update()`.* `OwnerPIN.update` resets
-  the try counter itself — the contract `SET_PIN` after `CLEAR_PIN` already
-  rests on — so the reset would re-fill a counter the next call re-fills, and
+  the try counter itself. The contract for `SET_PIN` after `CLEAR_PIN` already
+  rests on that behavior, so the reset would refill a counter the next call
+  refills, and
   [D15](#d15) records why a redundant counter write is worse than none.
   `PukTest` scans for its absence.
 - *A `JCSystem` transaction around the PIN write and the state byte.* The
@@ -554,7 +553,8 @@ then byte 7 = 1. A tear leaves state 2 over the new PIN, refused by
 `VERIFY_PIN` on the state byte, finished by the same PUK. `failPukCheck`:
 the counter (decremented inside `OwnerPIN.check`), then byte 8 = 2. A tear
 leaves state 1 over an empty counter, which the next `UNBLOCK_PIN` turns
-into `63 C0` and the 2 — never a recovered try. `PukTest` scans the three
+into `63 C0` and the value 2, which reports an exhausted PUK without restoring a try.
+`PukTest` scans the three
 orders in the source and sets the three torn states directly.
 
 Readers: byte 8 is read with byte 7 on every tap. A terminal shows a card
@@ -569,14 +569,14 @@ The applet version moved to 0.6: two new instructions, a capability bit and
 a ninth GET_INFO byte are wire-visible, and a 0.5 card answers `0x44` and
 `0x45` with `6D00`. A 0.5 card is not vulnerable and need not be reinstalled;
 it lacks the feature, and so lacks the recovery. 0.6 is a fresh install
-(delete + install, sweep first), as every applet version is — there is no
+(delete + install, sweep first), as every applet version is. There is no
 in-place upgrade, and so no way to add a PUK to a card in the field without
 regenerating its key.
 
 ---
 
 
-## <a id="d17"></a>D17 — The mint's proof is kept with each piece, reserved after install, one piece a command
+## <a id="d17"></a>D17: The mint's proof is kept with each piece, reserved after install, one piece a command
 
 **Decided:** from software 1.20 the card keeps, for each piece, the mint's NUT-12
 proof as a later holder needs it: `e`, `s` and the blinding factor `r`, 96 bytes
@@ -641,7 +641,7 @@ which the chip has.
 
 ---
 
-## <a id="d18"></a>D18 — One card protocol with Foxy: their 1.20 is the base of 2.0
+## <a id="d18"></a>D18: One card protocol with Foxy: their 1.20 is the base of 2.0
 
 **Decided (ENG-673):** the applet in this repository is the Foxy wallet
 project's fork ([getfoxy/card](https://github.com/getfoxy/card) at `88840aa`,
@@ -691,7 +691,7 @@ this PR. It comes when a 2.0 card is on the bench.
 
 ---
 
-## <a id="d19"></a>D19 — A neutral identity: AID F0 CASHUCARD, labels CashuCard/, version 2.0
+## <a id="d19"></a>D19: A neutral identity: AID F0 CASHUCARD, labels CashuCard/, version 2.0
 
 **Decided (ENG-673):** the package AID is `F0 43 41 53 48 55 43 41 52 44`
 ("CASHUCARD" after the proprietary RID byte `F0`). Every instance AID derives
@@ -731,7 +731,7 @@ page a 2.0 card's tag opens is a product decision left open.
 
 ---
 
-## <a id="d20"></a>D20 — The clock walk is bounded: a rollover budget, REFRESH, an armed allowance, an anchored owner
+## <a id="d20"></a>D20: The clock walk is bounded: a rollover budget, REFRESH, an armed allowance, an anchored owner
 
 *Amended by [D26](#d26) (2.1): only a payment that moves value rolls the day, and
 a `SET_LIMIT` without the budget's byte leaves the budget as it is. The text
@@ -767,8 +767,8 @@ spent its first day on trust.
   one transaction. The owner's phone sends it with the tip whenever it is
   online. No PIN; any funds; a locked card too, since a locked card still pays.
   `53` was free at `88840aa`; Foxy signs off on the number in the PR.
-- **The allowance renews only when armed.** At a roll the no-PIN count goes to
-  nothing only if a PIN (`VERIFY_PIN`) or an owner's proof has been given since
+- **The allowance renews only when armed.** At a roll the no-PIN count resets
+  only if a PIN (`VERIFY_PIN`) or an owner's proof has been given since
   it last did, and the roll spends the arming. A reader with no PIN gets one
   allowance per arming, not one a day.
 - **The anchor.** `SET_OWNER` may carry a block header after the key (65 + 80
@@ -811,7 +811,7 @@ it sends puts the budget back to 7, in both directions:
   2.1 holds the opposite, `aFormWithoutTheByteLeavesABudgetOfTwo`, [D26](#d26));
 - an owner's budget of 8 to 30 is tightened to 7, so a holder the owner gave
   a longer budget because they are offline for weeks finds the day's limit
-  stops renewing after a week, not a month, and has to come online and tap
+  stops renewing after one week instead of one month, and has to come online and tap
   the card sooner (2.0's `ClockWalkTest.aFormWithoutTheByteTightensABudgetOfThirtyToSeven`;
   2.1: `aFormWithoutTheByteLeavesABudgetOfThirty`).
 
@@ -837,7 +837,7 @@ daily limit or a small balance (SECURITY-MODEL #14, #17).
 
 ---
 
-## <a id="d21"></a>D21 — The field multiply does the same work for every input
+## <a id="d21"></a>D21: The field multiply does the same work for every input
 
 **Decided (ENG-673):** `SchnorrHW.mul256x256` and `mulByDelta` have no branch
 and no loop whose length depends on a byte of an operand. The `if (ai == 0)
@@ -875,7 +875,7 @@ of a multiply, which is not specified constant.
 
 ---
 
-## <a id="d22"></a>D22 — The PIN's state byte is its commit: a torn CHANGE_PIN stays blocked
+## <a id="d22"></a>D22: The PIN's state byte is its commit: a torn CHANGE_PIN stays blocked
 
 **Found (reply notes to Foxy), verified in 1.20, fixed (ENG-673, fix 4c).**
 `CHANGE_PIN` writes the new PIN (`OwnerPIN.update`, which also refills the
@@ -912,7 +912,7 @@ order; jCardSim cannot tear a write and its transactions do not roll back.
 
 ---
 
-## <a id="d23"></a>D23 — The tear review of 2.0: every write outside a transaction, site by site
+## <a id="d23"></a>D23: The tear review of 2.0: every write outside a transaction, site by site
 
 **Decided (ENG-673, fix 4d):** every persistent write in `CashuApplet` that is
 not inside a `JCSystem` transaction was listed and reviewed against the
@@ -943,7 +943,7 @@ a tear leaves are set by hand in the tests and shown harmless, as in D14.
 
 ---
 
-## <a id="d24"></a>D24 — FLOOR_BITS is a quarter of the work of the newest header in the vectors
+## <a id="d24"></a>D24: FLOOR_BITS is a quarter of the work of the newest header in the vectors
 
 **Decided (ENG-673):** `FLOOR_BITS`, the least work any block header must
 show before a card that has taken none believes it, is four times the target
@@ -968,7 +968,7 @@ costs a forger a quarter of a block's work (about 2^77 hashes) per day it buys.
 
 ---
 
-## <a id="d25"></a>D25 — Readers select the card's applet by its whole AID
+## <a id="d25"></a>D25: Readers select the card's applet by its whole AID
 
 **Decided (ENG-681):** a reader selects the card's applet by its whole instance
 AID, `F0 43 41 53 48 55 43 41 52 44 01` (`00 A4 04 00 0B F0 43 41 53 48 55 43 41
@@ -1128,8 +1128,8 @@ leaves the budget to the owner.
 
 Small changes: open a PR and reference the decision id (e.g. "revisits D5").
 
-Changes that alter the product's shape — recovery, identity, custody, the
-trust boundaries in [`ARCHITECTURE.md`](ARCHITECTURE.md) — warrant a **Flash
+Changes that alter the product's shape, including recovery, identity, custody
+or the trust boundaries in [`ARCHITECTURE.md`](ARCHITECTURE.md), warrant a **Flash
 Improvement Proposal**. That process exists precisely for "large-scale or
 cross-team changes", and this project does not yet have one of its own: the
 closest is FIP-04, which describes the design being replaced. *(The FIP

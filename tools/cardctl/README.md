@@ -1,12 +1,12 @@
-# cardctl — host-side driver for the Cashu card applet, protocol 2.0
+# cardctl: host-side driver for the Cashu card applet, protocol 2.0
 
 A PC/SC command-line tool that speaks protocol 2.0 as
 [`spec/APDU.md`](../../spec/APDU.md) has it, over either a contact or a
 contactless reader: the reads, `AUTH`, the owner's commands (with a P-256
 owner key, `p256.py`), the clock, loads and the PIN.
 
-Until this existed there was **no way to talk to a card at all** — the applet
-had been exercised only under jCardSim, which cannot surface EEPROM exhaustion,
+This is the first host tool for the card. Before it existed, the applet had
+been exercised only under jCardSim, which cannot surface EEPROM exhaustion,
 ECDH output framing differences, or a card whose `getS` returns short. Those are
 precisely the bugs that only appear on silicon.
 
@@ -17,7 +17,7 @@ cd tools/cardctl
 pip install -r requirements.txt
 ```
 
-- **macOS** — PC/SC ships with the OS. Do **not** install `pcsc-lite`; it
+- **macOS:** PC/SC ships with the OS. Do **not** install `pcsc-lite`; it
   conflicts with the built-in daemon.
 
   ⚠️ **Do not use the system Python** (`/usr/bin/python3`, 3.9). `pip install
@@ -27,7 +27,7 @@ pip install -r requirements.txt
   ImportError: dynamic module does not define module export function (PyInit__scard)
   ```
 
-  which looks like a broken reader or a bad install and is neither — it is an
+  which looks like a broken reader or a bad install. The cause is an
   ABI mismatch in the native `_scard` module. Use a Homebrew Python instead:
 
   ```bash
@@ -37,7 +37,7 @@ pip install -r requirements.txt
   ```
 
   Verified working on Homebrew Python 3.14.
-- **Debian/Ubuntu** — `sudo apt install pcscd libpcsclite-dev` and make sure
+- **Debian/Ubuntu:** run `sudo apt install pcscd libpcsclite-dev` and make sure
   `pcscd` is running.
 
 ## Quick start
@@ -49,18 +49,18 @@ python3 cardctl.py selftest     # the one that matters
 
 `selftest` is the card-arrival test. It selects the applet, reads `GET_INFO`,
 the public key and the record, asks the card to prove itself with `AUTH` over
-random bytes of ours, and **verifies each signature against BIP-340** — then
+random bytes of ours. It **verifies each signature against BIP-340**, then
 checks that two `AUTH`s over the *same* bytes use different nonces, which is a
 real security property rather than a nicety (a nonce that is a pure function of
 `(d, msg)` lets a fault injector recover the private key from two signatures).
 `AUTH` burns nothing and needs no PIN.
 
 ```
-PASS  SELECT applet  — version 2.1
-PASS  GET_INFO  — v2.1, 128 slots, PIN set, owner yes
-PASS  format 4 (SIG_ALL pieces)  — format 4
-PASS  Schnorr capability advertised  — caps=0xFF
-PASS  GET_PUBKEY well-formed  — 02a1b2c3d4e5f60718…  (33 bytes)
+PASS  SELECT applet : version 2.1
+PASS  GET_INFO : v2.1, 128 slots, PIN set, owner yes
+PASS  format 4 (SIG_ALL pieces) : format 4
+PASS  Schnorr capability advertised : caps=0xFF
+PASS  GET_PUBKEY well-formed : 02a1b2c3d4e5f60718…  (33 bytes)
 PASS  AUTH + BIP-340 verify [1/3]
 ...
 All 13 checks passed on physical hardware.
@@ -97,7 +97,7 @@ cd applet && ant clean cap
 # three applets, the opener first: docs/HARDWARE_DEPLOYMENT.md has the commands
 ```
 
-**The card must be JavaCard 3.0.5 or later** — the applet needs
+**The card requires JavaCard 3.0.5 or later.** The applet needs
 `KeyAgreement.ALG_EC_SVDP_DH_PLAIN_XY`, which does not exist in 3.0.4. JCOP4
 works; JCOP3 / J3H145 / Feitian 3.0.4 cannot run this applet at all.
 
@@ -141,14 +141,14 @@ till drives), `clear-pin`, `set-puk` and `unblock-pin`. Their opcodes `43`, `44`
 back; `test_apdu.py` checks the parser refuses them.
 
 Global flags: `-r/--reader N` to pick a reader, `-v/--verbose` to log every APDU
-to stderr — use `-v` when a command misbehaves, since the raw exchange usually
+to stderr. Use `-v` when a command misbehaves; the raw exchange usually
 makes it obvious whether the card rejected the command or never saw it.
 
 ## Timing a card
 
 `--timing` goes before the command and times every APDU around the PC/SC
-transmit call, so each figure is the full reader round trip, not just the
-applet's own work. Per-APDU lines go to stderr as they happen and a per-command
+transmit call, so each figure measures the full reader round trip, including
+the applet's own work. Per-APDU lines go to stderr as they happen and a per-command
 table (count, min, median, max, total) follows at exit, even when the command
 fails partway.
 
@@ -183,17 +183,15 @@ cashu-client's `serializeCardFile` / `parseCardFile`. `test_card_file.py` parses
 the spec and asserts this driver's parser and writer against the published field
 tables, so a rename on this side fails in CI rather than at a card reader.
 
-> **The two halves do not interoperate yet.** cashu-client (`cashucard/client#5`)
-> does not know the `spent` field and rejects any key outside its allowlist, so
-> today it refuses what `dump` writes and `load-file` refuses what it writes.
-> The spec's status note has the details; the two changes must merge together.
+> **Shared card-file support:** cashu-client PR #5 and javacard PR #19 added
+> support for the `spent` field and merged on 2026-08-28. The two implementations
+> follow the contract in [`spec/CARD-FILE.md`](../../spec/CARD-FILE.md).
 
 Four things the format insists on, all because a card file is bearer money:
 
-- **`spent` is required, not defaulted.** A file that omits it is not a file of
-  unspent proofs, it is a file whose state is unknown — and guessing "unspent"
-  turns settled money back into spendable balance on the next `load-file`.
-- **Unknown fields are refused, not ignored.** At document and slot level. An
+- **`spent` is required.** A file that omits it has an unknown state. Treating it
+  as "unspent" turns settled money back into spendable balance on the next `load-file`.
+- **The parser rejects unknown fields** at document and slot level. An
   unrecognised key means the writer added something without bumping `version`;
   dropping it silently is how the two sides drift apart in the first place.
 - **Amounts are positive powers of two below 2^32,** and keyset ids are NUT-02
@@ -203,9 +201,9 @@ Four things the format insists on, all because a card file is bearer money:
 - **`load-file` is re-runnable.** `LOAD_PROOF` commits one proof at a time with
   no transaction around the file, so a failure part-way through leaves half of
   it on the card. Re-running skips whatever is already there by nonce instead of
-  writing duplicates, and everything checkable — capacity, amounts, points — is
-  checked before the first write. A nonce the card has already *spent* is
-  reported as spent, not as "already loaded".
+  writing duplicates. The tool checks capacity, amounts and points before the
+  first write. If the card has already spent a nonce, `load-file` reports it
+  as spent.
 
 `dump` validates the document it assembled before writing it, so a mistake like
 `dump --mint "$UNSET_VAR"` fails loudly instead of leaving an unloadable backup.

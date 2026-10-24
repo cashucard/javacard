@@ -1,4 +1,6 @@
-# Flashcard: the screens, as they are built
+<a id="flashcard-the-screens-as-they-are-built"></a>
+
+# Foxy Flashcard screens (historical)
 
 What each screen is for, what is on it, and its states, in the wallet as it
 stands (the wallet repository, getfoxy/iOS, https://github.com/getfoxy/iOS:
@@ -302,7 +304,9 @@ are, when the price moves.
 - Change waiting for a payer's card: on that payment's own entry, which says
   to tap the card. It stays until the card is tapped.
 
-## E. Built, and on no screen while cards are cash
+<a id="e-built-and-on-no-screen-while-cards-are-cash"></a>
+
+## E. Implemented features outside the current screens
 
 - Choosing how a lost card is treated when it is set up (`IF THE CARD IS LOST`)
 - The screen before a card is tapped, with `CARDS YOU LOADED` under it
