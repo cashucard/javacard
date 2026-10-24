@@ -194,7 +194,7 @@ class SchnorrHWMathTest {
         java.nio.file.Path root = mainSourceDir().toAbsolutePath().normalize();
         for (int i = 0; i < 7; i++) root = root.getParent();   // <repo>/applet/src/main/java/me/flashapp/cashu -> <repo>
         String model = flat(root.resolve("docs").resolve("SECURITY-MODEL.md"));
-        String nut = flat(root.resolve("spec").resolve("NUT-XX.md"));
+        String apdu = flat(root.resolve("spec").resolve("APDU.md"));
         String decisions = flat(root.resolve("docs").resolve("DECISIONS.md"));
         int from = model.indexOf("5. **Side-channel review**");
         int to = model.indexOf("6. **", from);
@@ -213,8 +213,8 @@ class SchnorrHWMathTest {
             if (!item5.contains("`" + name + "`")) problems.add(name + " branches and is not named in SECURITY-MODEL open item 5");
             if (!d21Text.contains(name)) problems.add(name + " branches and is not named in D21's 'What this does not reach'");
         }
-        if (nut.contains("arithmetic on its key and nonces has no secret-dependent branches")) {
-            problems.add("spec/NUT-XX.md claims the card's whole arithmetic has no secret-dependent branches; D21 covers the multiplies only");
+        if (apdu.contains("arithmetic on its key and nonces has no secret-dependent branches")) {
+            problems.add("spec/APDU.md claims the card's whole arithmetic has no secret-dependent branches; D21 covers the multiplies only");
         }
         if (model.contains("Mitigated in our arithmetic")) {
             problems.add("SECURITY-MODEL #19 calls timing 'Mitigated in our arithmetic'; the reductions still branch");

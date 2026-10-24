@@ -169,7 +169,7 @@ discovery that none of these capture. The median is the figure to quote.
 `load` without `--c` inserts a random placeholder in place of the mint's
 signature. That is fine for exercising storage and slot management, but such a
 proof can never be redeemed at a mint. A 2.0 card signs only format-4 `SIG_ALL`
-pieces locked to its key ([`spec/NUT-XX.md`](../../spec/NUT-XX.md)); `load`
+pieces locked to its key ([NUT-CCP](https://github.com/cashucard/nut/blob/main/CCP.md#card-proofs)); `load`
 writes whatever it is given, so a real top-up is a wallet's NUT-11 swap first.
 
 ## Card files (0.x cards only)
@@ -224,7 +224,7 @@ refuses the whole dump.
 python3 test_bip340.py            # verifier: spec vectors, reference round-trip, mutations
 python3 test_p256.py              # the owner's ECDSA: RFC 6979 vectors and the card's own (spec/vectors/owner.json)
 python3 test_apdu.py              # every command's bytes, against spec/APDU.md
-python3 test_spec_consistency.py  # cardctl vs spec/APDU.md, NUT-XX.md and the applet, parsed
+python3 test_spec_consistency.py  # cardctl vs spec/APDU.md and the applet, parsed; the applet vs NUT-CCP's secret
 python3 test_card_file.py         # card file read/write, against spec/CARD-FILE.md
 python3 test_hwtest_65byte_pubkey.py  # host-side pubkey normalisation used by hwtest_65byte_pubkey.py
 ```

@@ -58,11 +58,12 @@ unlocking).
 | [10](https://github.com/cashubtc/nuts/blob/main/10.md) | Well-known secrets | `parseP2PKSecret` |
 | [11](https://github.com/cashubtc/nuts/blob/main/11.md) | **P2PK** — lock a proof to a pubkey | `witness.ts`, the applet |
 | [12](https://github.com/cashubtc/nuts/blob/main/12.md) | **DLEQ** — prove the mint used its published key | `dleq.ts` |
-| **NUT-XX** | *This project's own draft* — Cashu NFC cards | [`../spec/NUT-XX.md`](../spec/NUT-XX.md) |
+| **NUT-CCP** | *This project's own draft* — the Cashu Card Protocol | [cashucard/nut `CCP.md`](https://github.com/cashucard/nut/blob/main/CCP.md) |
 
-**NUT-XX** is our proposal, not yet submitted upstream. Profile A is an online,
-BoltCard-compatible mode; **Profile B** is the offline bearer card this repo
-implements.
+**NUT-CCP** is our proposal, not yet submitted upstream, and keeps that name
+until the Cashu maintainers assign it a number. It specifies the core every card
+and reader share. The profiles this applet adds (the owner, the clock and the
+limits, the NFC tag) are in [`../spec/APDU.md`](../spec/APDU.md).
 
 ## Smartcards
 

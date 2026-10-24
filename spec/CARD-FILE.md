@@ -3,7 +3,7 @@
 > **0.x only.** A card file describes the pieces of a card on the 0.x applet
 > (AID `D2 76 00 00 85 01 02`): a 78-byte slot with no date, whose secret is the
 > 0.x P2PK text. A protocol 2.0 card's pieces carry a date and a format-4
-> `SIG_ALL` secret ([`NUT-XX.md`](NUT-XX.md)), which v1 cannot describe, so
+> `SIG_ALL` secret ([NUT-CCP](https://github.com/cashucard/nut/blob/main/CCP.md#card-proofs)), which v1 cannot describe, so
 > `cardctl dump` and `cardctl load-file` select the 0.x AID and refuse any other
 > card. The format is kept for the sweep of 0.x cards (`docs/HARDWARE_DEPLOYMENT.md`)
 > and for cashu-client's reader of existing files; a 2.0 card file would be a v2.

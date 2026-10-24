@@ -7,7 +7,7 @@ import javacardx.crypto.*;
 /**
  * Cashu JavaCard Applet
  *
- * Implements NUT-XX Profile B (Bearer/Offline) for offline NFC payments.
+ * Implements NUT-CCP, the Cashu Card Protocol, for offline NFC payments.
  * Stores Cashu proofs in hardware-persistent EEPROM with non-resettable
  * spend counters. Provides secp256k1 signing for NUT-11 P2PK spending
  * conditions.
@@ -93,7 +93,7 @@ import javacardx.crypto.*;
  *
  * @see <a href="https://github.com/cashucard/javacard">cashu-javacard</a>
  * @see spec/APDU.md for full command reference
- * @see spec/NUT-XX.md for protocol specification
+ * @see <a href="https://github.com/cashucard/nut">NUT-CCP</a> for the protocol specification
  */
 public class CashuApplet extends Applet implements TagSwitch {
 
@@ -232,7 +232,7 @@ public class CashuApplet extends Applet implements TagSwitch {
     static final short PROOF_AMOUNT_OFFSET = (short) 9;
     // The 32 bytes are the P2PK *nonce*, not the secret: a NUT-10 P2PK secret
     // is a JSON string of ~150 bytes and cannot fit. The reader rebuilds the
-    // secret from this nonce plus GET_PUBKEY. See spec/NUT-XX.md.
+    // secret from this nonce plus GET_PUBKEY. See NUT-CCP's card proofs.
     static final short PROOF_NONCE_OFFSET  = (short) 13;
     static final short PROOF_C_OFFSET      = (short) 45;
     // The piece's NUT-11 locktime, big-endian seconds, or 0 for none. With a

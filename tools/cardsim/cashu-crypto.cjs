@@ -7,7 +7,7 @@
  *   - NUT-00 hash_to_curve, blinding and unblinding;
  *   - NUT-12 DLEQ verification, of a blind signature (e, s) and of a proof (e, s, r) as the card keeps it;
  *   - BIP-340 verification, for the card's AUTH and payment signatures;
- *   - the format-4 secret the card signs (spec/NUT-XX.md) and the NUT-11 SIG_ALL message.
+ *   - the format-4 secret the card signs (NUT-CCP's card proofs) and the NUT-11 SIG_ALL message.
  *
  * Speed is irrelevant: a test makes a few dozen points. Checked in cashu-crypto.test.cjs against NUT-00's vectors, the
  * card's own spec/vectors/secret.json, and (with CARDSIM_URL and MINT_URL set) a real Nutshell mint.
@@ -164,7 +164,7 @@ function schnorrVerify(pub, msg, sig) {
 }
 
 // ── the card ─────────────────────────────────────────────────────────────────
-/** The format-4 secret a 2.0 card signs (spec/NUT-XX.md): its key, the nonce, and with a date the locktime and refund key; SIG_ALL last. */
+/** The format-4 secret a 2.0 card signs (NUT-CCP's card proofs): its key, the nonce, and with a date the locktime and refund key; SIG_ALL last. */
 function cardSecret(nonceHex, cardKeyHex, date = 0, refundHex = null) {
   const head = `["P2PK",{"nonce":"${nonceHex.toLowerCase()}","data":"${cardKeyHex.toLowerCase()}","tags":[`
   if (!date) return head + '["sigflag","SIG_ALL"]]}]'

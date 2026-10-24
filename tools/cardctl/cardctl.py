@@ -943,7 +943,7 @@ def _slot_from_json(entry, index: int) -> dict:
     if "nonce" not in entry and "secret" in entry:
         raise SystemExit(
             f'{where}has "secret" but no "nonce" — the card stores the 32-byte '
-            f"P2PK nonce, not the secret string (~150 bytes of JSON). See NUT-XX."
+            f"P2PK nonce, not the secret string (~150 bytes of JSON). See NUT-CCP."
         )
     _reject_unknown_fields(entry, SLOT_FIELDS, where)
 

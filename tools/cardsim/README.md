@@ -181,7 +181,7 @@ also with no dependencies.
 ```bash
 java -jar tools/cardsim/target/cardsim.jar --port 9876 &
 curl -s -X POST localhost:9876/reset | jq -r .pubkey
-# mint pieces to that key at your mint (format-4 SIG_ALL secrets, spec/NUT-XX.md), then:
+# mint pieces to that key at your mint (format-4 SIG_ALL secrets, NUT-CCP's card proofs), then:
 curl -s -X POST localhost:9876/fixture -d '{
   "pin": "1234", "mint": "http://127.0.0.1:3338", "owner": true,
   "anchor": "<the tip header, 80 bytes>",

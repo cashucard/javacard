@@ -38,7 +38,7 @@ import java.util.Set;
  * the byte (D26); the fixture always sends it, so a fixture's card never keeps a budget from before. tools/cardsim/README.md
  * has the whole schema.
  *
- * The pieces are format-4 SIG_ALL pieces locked to the card key (spec/NUT-XX.md), minted by the caller at a mint
+ * The pieces are format-4 SIG_ALL pieces locked to the card key (NUT-CCP's card proofs), minted by the caller at a mint
  * after reading {@code /state.pubkey}; with {@code dleq} they are loaded with the mint's proof (LOAD_PROOF P1 = 1).
  * The 0.x keys {@code puk} and {@code appletVersion} are refused by name: there is no PUK and no version mask on 2.0
  * (D18). Unknown keys are refused at every level, for the reason CARD-FILE.md gives: a field silently dropped here is
