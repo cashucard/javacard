@@ -156,7 +156,7 @@ A phone derives a card's owner key as
 | Byte | Field | Meaning |
 |---|---|---|
 | 0 | version major | `02` |
-| 1 | version minor | `00` |
+| 1 | version minor | `01` |
 | 2 | max slots | 128 (`0x80`) |
 | 3 | unspent | slots holding an unspent piece |
 | 4 | spent | slots spent and not yet freed |
