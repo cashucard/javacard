@@ -5,8 +5,12 @@ Ennis's OpenPGP key:
 
 ```
 ed25519 3139 A2E7 74DA F732 8533  D0EC 0A89 7098 CF0A 7E5B
-Jabari Ennis (Dread) <dread@islandbitcoin.com>
+Jabari Ennis (Dread) <github@bobodread.com>
 ```
+
+Commits from 2026-10-24 are signed as `github@bobodread.com`. The key also
+carries `dread@islandbitcoin.com`, the address on the first commits signed
+that day.
 
 The public key is [`signing-key.asc`](signing-key.asc), and GitHub serves the
 same key at <https://github.com/islandbitcoin.gpg>.
