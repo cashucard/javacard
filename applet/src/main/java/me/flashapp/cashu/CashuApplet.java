@@ -91,7 +91,7 @@ import javacardx.crypto.*;
  *     card's pieces can be taken back by whoever loaded them.
  *   - The card says which mint its pieces are at.
  *
- * @see <a href="https://github.com/lnflash/cashu-javacard">cashu-javacard</a>
+ * @see <a href="https://github.com/cashucard/javacard">cashu-javacard</a>
  * @see spec/APDU.md for full command reference
  * @see spec/NUT-XX.md for protocol specification
  */

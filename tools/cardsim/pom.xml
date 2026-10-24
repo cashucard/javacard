@@ -15,7 +15,7 @@
         app's fake NFC transport can talk to a card without a reader. See the
         header of CardSim.java for the API.
     </description>
-    <url>https://github.com/lnflash/cashu-javacard</url>
+    <url>https://github.com/cashucard/javacard</url>
 
     <properties>
         <maven.compiler.release>11</maven.compiler.release>

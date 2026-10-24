@@ -5,7 +5,7 @@
 `depends on: NUT-00, NUT-01, NUT-02, NUT-03, NUT-07, NUT-09, NUT-10, NUT-11, NUT-12`
 
 > **Status: Draft, protocol 2.0** — Reference implementation at
-> [lnflash/cashu-javacard](https://github.com/lnflash/cashu-javacard), shared with
+> [cashucard/javacard](https://github.com/cashucard/javacard), shared with
 > the Foxy wallet project ([getfoxy/card](https://github.com/getfoxy/card)). Not yet
 > submitted to cashubtc/nuts. The byte-level wire is [`APDU.md`](APDU.md); this
 > document says what the bytes mean to a wallet and a mint.

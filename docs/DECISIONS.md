@@ -86,7 +86,7 @@ which contradicts D2. It also means the recovery secret becomes the real
 credential and the chip stops being the security boundary.
 
 **This is the most-questioned decision, and the counter-proposal is good.**
-[PR #4](https://github.com/lnflash/cashu-javacard/pull/4) proposed using NUT-11's
+[PR #4](https://github.com/cashucard/javacard/pull/4) proposed using NUT-11's
 existing `refund` + `locktime` tags so a lost card's proofs can be swept to a
 recovery key after a timeout — no applet key changes, no seed. It is the right
 shape. It was closed unmerged on 2026-10-02, because it was written before

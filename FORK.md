@@ -8,7 +8,7 @@
 > anchored owner, and the fixes). Where this and [`spec/APDU.md`](spec/APDU.md) differ, the
 > spec is the 2.0 wire.
 
-`getfoxy/card` is a fork of `lnflash/cashu-javacard` (applet 0.4, `c1f4580`,
+`getfoxy/card` is a fork of `cashucard/javacard` (applet 0.4, `c1f4580`,
 MIT). The applet here is **not compatible on the wire** with
 upstream's, and has an AID of its own (`F0 46 4F 58 59 43 41 52 44`) so that
 neither can be mistaken for the other.
@@ -152,4 +152,4 @@ entitlement (`tools/flashcard.entitlements` there), MENU, FLASHCARD, TAP CARD.
 
 The spec's section 4 lists weaknesses found in upstream's applet 0.4, and what
 this fork does about each. Upstream's own repository is
-https://github.com/lnflash/cashu-javacard.
+https://github.com/cashucard/javacard.

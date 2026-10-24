@@ -56,7 +56,7 @@ import javacard.security.*;
  *   Transient footprint: `sc` (256 B scratchpad) + `work` (288 B arithmetic
  *   scratch, see WORK_LEN).
  *
- * ENG-182 — lnflash/cashu-javacard
+ * ENG-182 — cashucard/javacard
  */
 final class SchnorrHW {
 

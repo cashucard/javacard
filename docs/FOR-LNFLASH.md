@@ -10,7 +10,7 @@
 > anchored owner, and the fixes). Where this and [`spec/APDU.md`](../spec/APDU.md) differ, the
 > spec is the 2.0 wire.
 
-From the Foxy wallet project (getfoxy), to the authors of `lnflash/cashu-javacard`.
+From the Foxy wallet project (getfoxy), to the authors of `cashucard/javacard`.
 
 We forked your applet at 0.4 (`c1f4580`, MIT) to make a card that pays a Foxy
 wallet on an iPhone by a tap and a PIN. This note says what we changed and

@@ -11,7 +11,7 @@
 
     <name>Cashu JavaCard Applet</name>
     <description>NUT-XX Profile B Bearer Card — offline Cashu proof storage on JavaCard</description>
-    <url>https://github.com/lnflash/cashu-javacard</url>
+    <url>https://github.com/cashucard/javacard</url>
 
     <properties>
         <maven.compiler.source>11</maven.compiler.source>

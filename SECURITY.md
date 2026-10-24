@@ -1,6 +1,6 @@
 # Security Policy
 
-This is the Foxy fork of `lnflash/cashu-javacard`: a JavaCard applet that holds
+This is the Foxy fork of `cashucard/javacard`: a JavaCard applet that holds
 ecash on a card, and the documents that go with it. A bug here can lose the
 money on a card, so reports are welcome and taken seriously.
 
@@ -35,4 +35,4 @@ the documents. The Foxy app that talks to the card has its own policy in
 Code that this fork took from upstream and did not change, and the host tools
 in `tools/cardctl` and `tools/e2e-*` that describe upstream's wire, are
 upstream's. For a problem that is in upstream's applet and not in this fork,
-follow the policy of [lnflash/cashu-javacard](https://github.com/lnflash/cashu-javacard).
+follow the policy of [cashucard/javacard](https://github.com/cashucard/javacard).

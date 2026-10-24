@@ -9,7 +9,7 @@
 > spec is the 2.0 wire.
 
 A card that holds ecash and pays a Foxy by a tap, and the changes to make in a
-fork of `lnflash/cashu-javacard` and in Foxy to get there.
+fork of `cashucard/javacard` and in Foxy to get there.
 
 The card's daily limit, its owner and its clock are specified in full in
 `FOXY-CARD-DAILY-LIMIT.md`. This document keeps the part of them that the rest
@@ -20,7 +20,7 @@ built.
 
 ## 0. What this is based on
 
-- `lnflash/cashu-javacard`, applet 0.4, commit `c1f4580`, MIT. Its `spec/APDU.md`,
+- `cashucard/javacard`, applet 0.4, commit `c1f4580`, MIT. Its `spec/APDU.md`,
   `spec/NUT-XX.md` (Profile B and B+), `docs/DECISIONS.md` and the J3R180
   hardware report.
 - The review made of applet 0.2 and its terminal, read again against 0.4.

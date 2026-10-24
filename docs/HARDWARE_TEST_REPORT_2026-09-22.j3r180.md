@@ -1,4 +1,4 @@
-> This is upstream's own report of their applet on their hardware (lnflash/cashu-javacard), kept as received. It is not a report on the Foxy fork.
+> This is upstream's own report of their applet on their hardware (cashucard/javacard), kept as received. It is not a report on the Foxy fork.
 
 # On-silicon test report — NXP JCOP4 J3R180 P71 (2026-09-22)
 
