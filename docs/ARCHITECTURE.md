@@ -123,8 +123,8 @@ Two fields here are easy to get wrong, and both make proofs unspendable:
 - **The 32 bytes are the *nonce*, not the secret.** A NUT-10 P2PK secret is a
   JSON string of roughly 150 bytes and cannot fit in a proof slot. The card
   stores only the nonce; a reader rebuilds the full secret from the nonce plus
-  the card's public key. See [`spec/NUT-XX.md`](../spec/NUT-XX.md) —
-  *Reconstructing the full Proof from card storage*.
+  the card's public key. See NUT-CCP,
+  [*The stored form*](https://github.com/cashucard/nut/blob/main/CCP.md#the-stored-form).
 
 Protocol 2.0: 128 slots × 82 bytes (the 78 above and a 4-byte date) = **10,496
 bytes** of proof storage, 130 bytes a slot more of the hex text a payment hashes,
@@ -183,7 +183,7 @@ Two honest caveats:
 2. (pay the invoice by any means)
 3. wallet: split the amount into powers of two            → [64, 16, 4, …]
 4. wallet: blind each format-4 secret, SIG_ALL, locked to the CARD's key
-                 ↳ spec/NUT-XX.md, "The card piece"
+                 ↳ NUT-CCP, "Card proofs"
 5. wallet: mint                                             → blind signatures with DLEQ
 6. wallet: unblind, check the DLEQ                          → offline check
 7. owner's phone: GET_NONCE, ALLOW_LOAD, LOAD_PROOF (P1 = 1) × n
@@ -234,5 +234,5 @@ known GlobalPlatform keys, or the applet can never be installed.
 | Talk to a card | [`../tools/cardctl/README.md`](../tools/cardctl/README.md) |
 | Load the applet onto silicon | [`HARDWARE_DEPLOYMENT.md`](HARDWARE_DEPLOYMENT.md) |
 | Read the wire protocol | [`../spec/APDU.md`](../spec/APDU.md) |
-| Read the protocol spec | [`../spec/NUT-XX.md`](../spec/NUT-XX.md) |
+| Read the protocol spec | [NUT-CCP](https://github.com/cashucard/nut/blob/main/CCP.md) |
 | Look up a term | [`GLOSSARY.md`](GLOSSARY.md) |

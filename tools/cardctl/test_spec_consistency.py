@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Asserts that spec/APDU.md, spec/NUT-XX.md, cardctl.py and CashuApplet.java
-still agree, for protocol 2.0.
+Asserts that spec/APDU.md, cardctl.py and CashuApplet.java still agree, and
+that the applet builds the card proof secrets NUT-CCP states, for protocol 2.0.
 
 This repo's characteristic bug is not a crash — it is a document and an
 implementation drifting apart while both look fine on their own. It happened
@@ -12,7 +12,7 @@ three times on the 0.x wire:
     unspendable.
   * the 32-byte field documented as the "secret", which cannot fit — it is the
     nonce.
-  * `SPEND_PROOF`'s message documented as something other than what NUT-XX
+  * `SPEND_PROOF`'s message documented as something other than what the NUT
     specified.
 
 Each one was found by a human reading two files side by side. These tests do
@@ -20,8 +20,10 @@ it on every push, for the 2.0 wire.
 
 Three artefacts have to agree, so all three are read here:
 
-  * spec/APDU.md (and NUT-XX.md) is *parsed*, never imported from — a shared
-    constant cannot catch a doc that lies, and the doc is what implementers read.
+  * spec/APDU.md is *parsed*, never imported from — a shared constant cannot
+    catch a doc that lies, and the doc is what implementers read. The core,
+    NUT-CCP, is CCP.md in cashucard/nut: its two card proof secrets are quoted
+    below (CCP_SECRET_PLAIN, CCP_SECRET_DATED), and the applet is held to them.
   * cardctl.py is *driven*, not read: the documented header, Lc/Le, response
     sizes and field order are checked against the bytes the real encoder puts
     on the wire. Completeness ratchets fail the day a command cardctl drives is
@@ -46,7 +48,12 @@ from test_apdu import make_card, INFO_43, CARD_ANSWER
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SPEC_DIR = ROOT / "spec"
 APDU_MD = SPEC_DIR / "APDU.md"
-NUT_XX_MD = SPEC_DIR / "NUT-XX.md"
+# NUT-CCP's card proof secrets, as CCP.md states them under "Card proofs"
+# (https://github.com/cashucard/nut/blob/main/CCP.md#card-proofs). A change to
+# them starts there; this copy changes with the applet that implements it.
+CCP_SECRET_PLAIN = '["P2PK",{"nonce":"<nonce>","data":"<P_card>","tags":[["sigflag","SIG_ALL"]]}]'
+CCP_SECRET_DATED = ('["P2PK",{"nonce":"<nonce>","data":"<P_card>","tags":[["locktime","<date>"],'
+                    '["refund","<refund key>"],["sigflag","SIG_ALL"]]}]')
 SECRET_JSON = SPEC_DIR / "vectors" / "secret.json"
 APPLET_JAVA = ROOT / "applet" / "src" / "main" / "java" / "me" / "flashapp" / "cashu" / "CashuApplet.java"
 DEPLOYMENT_MD = ROOT / "docs" / "HARDWARE_DEPLOYMENT.md"
@@ -322,24 +329,22 @@ def _applet_secret_parts() -> dict:
     return out
 
 
-def test_the_nut_xx_secret_is_the_one_the_applet_builds_and_the_vectors_sign():
+def test_the_card_proof_secret_is_the_one_the_applet_builds_and_the_vectors_sign():
     """
     The secret text is the wire between the card and every wallet that loads it:
-    the card signs the hash of exactly this. NUT-XX's text, the applet's byte
-    arrays and the vectors the applet's suite wrote must be one text.
+    the card signs the hash of exactly this. NUT-CCP's two forms, the applet's
+    byte arrays and the vectors the applet's suite wrote must be one text.
     """
     parts = _applet_secret_parts()
     nonce, key, refund, date = "ab" * 32, "02" + "cd" * 32, "03" + "ef" * 32, "1900000000"
     plain = parts["SECRET_1"] + nonce + parts["SECRET_2"] + key + parts["SECRET_3"] + parts["SECRET_END"]
     dated = (parts["SECRET_1"] + nonce + parts["SECRET_2"] + key + parts["SECRET_3"] + parts["SECRET_DATE"] + date
              + parts["SECRET_REFUND"] + refund + parts["SECRET_END_DATED"])
-    nut = NUT_XX_MD.read_text(encoding="utf-8")
-    nut_plain = re.search(r'^(\["P2PK",\{"nonce":"<64 hex>","data":"<66 hex P_card>","tags":\[\["sigflag","SIG_ALL"\]\]\}\])$', nut, re.M)
-    nut_dated = re.search(r'^(\["P2PK",\{"nonce":"<64 hex>","data":"<66 hex P_card>","tags":\[\["locktime","<decimal>"\],\["refund","<66 hex>"\],\["sigflag","SIG_ALL"\]\]\}\])$', nut, re.M)
-    assert nut_plain and nut_dated, "NUT-XX no longer states the two secret forms"
-    assert nut_plain.group(1).replace("<64 hex>", nonce).replace("<66 hex P_card>", key) == plain
-    assert (nut_dated.group(1).replace("<64 hex>", nonce, 1).replace("<66 hex P_card>", key)
-            .replace("<decimal>", date).replace("<66 hex>", refund)) == dated
+    assert CCP_SECRET_PLAIN.replace("<nonce>", nonce).replace("<P_card>", key) == plain, \
+        "the applet's secret without a date is not NUT-CCP's"
+    assert (CCP_SECRET_DATED.replace("<nonce>", nonce).replace("<P_card>", key)
+            .replace("<date>", date).replace("<refund key>", refund)) == dated, \
+        "the applet's dated secret is not NUT-CCP's"
     vectors = json.loads(SECRET_JSON.read_text(encoding="utf-8"))
     for piece in vectors["pieces"]:
         if piece["date"]:
@@ -351,8 +356,6 @@ def test_the_nut_xx_secret_is_the_one_the_applet_builds_and_the_vectors_sign():
 
 
 def test_the_sig_all_message_is_stated_as_the_card_hashes_it():
-    nut = NUT_XX_MD.read_text(encoding="utf-8")
-    assert "msg = secret_0 ‖ C_0 ‖ … ‖ secret_n ‖ C_n ‖ amount_0 ‖ B_0 ‖ … ‖ amount_m ‖ B_m" in nut
     assert "signature is over the NUT-11 `SIG_ALL` message: every piece's secret and `C`," in " ".join(_apdu_text().split()), \
         "APDU.md no longer says what the one signature is over"
 

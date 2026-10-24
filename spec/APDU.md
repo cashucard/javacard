@@ -8,6 +8,15 @@ bytes; what moves the day and the rollover budget is D26's (below). Version 2.x 
 compatible with the 0.x applet that this file used to describe, nor with Foxy's
 1.x: it has an AID of its own, so that neither can be mistaken for it.
 
+The protocol's core is [NUT-CCP](https://github.com/cashucard/nut/blob/main/CCP.md), the draft NUT in
+[cashucard/nut](https://github.com/cashucard/nut): selecting the card, card proofs,
+reading, paying, the card's own change and loading. This file is the reference
+implementation's command reference. It gives every command byte for byte, and it
+specifies the profiles NUT-CCP leaves to implementations: the owner
+([The owner's proof](#the-owners-proof)), the clock and the limits
+([The clock and the limits](#the-clock-and-the-limits)) and the NFC tag
+([The NFC tag application](#the-nfc-tag-application)).
+
 Class `B0` for every applet command. Numbers are big-endian unless a row says
 otherwise (a block header's own fields are little-endian, as the network carries
 them). `cardctl.py` (`tools/cardctl`) drives the commands it names below, and
@@ -134,7 +143,14 @@ Two more tags are hashed by the card: `CashuCard/auth` ([AUTH](#auth-0x15)) and
 `CashuCard/seal`, `CashuCard/pinkey` (the sealed PIN, [VERIFY_PIN](#verify_pin-0x40)).
 A phone derives a card's owner key as
 `HMAC-SHA256(seed, "CashuCard/owner" ‖ 0x00 ‖ card key (33))` mod n
-(`FOXY-CARD-SPEC.md` 5.6, with the 2.0 label); the card never sees it.
+(`FOXY-CARD-SPEC.md` 5.6, with the 2.0 label), made again with a counter byte
+appended while the result is 0; the card never sees it. Restoring the seed
+restores ownership of every card. [`vectors/owner.json`](vectors/owner.json) has
+proofs for every label.
+
+A card is set up in one tap, owner last: `SET_PIN` (or none), `SET_CARD` (the
+mint), then `SET_OWNER` carrying the tip block header as its anchor. An unowned
+empty card is open to the first phone that sets it up.
 
 ---
 
@@ -389,7 +405,7 @@ card's own change (`SPEND_ALL_CHANGE`, any number up to the openings free), then
 signature is over the NUT-11 `SIG_ALL` message: every piece's secret and `C`,
 then every output's amount and blinded message, in order. Every piece on a 2.0
 card is a format-4 P2PK secret locked to the card key with `["sigflag","SIG_ALL"]`
-(the [NUT-XX](NUT-XX.md) secret), so the mint takes this one signature for all of
+(NUT-CCP's [card proof](https://github.com/cashucard/nut/blob/main/CCP.md#card-proofs) secret), so the mint takes this one signature for all of
 them.
 
 ### SPEND_ALL_BEGIN (0x22)
@@ -798,7 +814,9 @@ owner has switched it off.
 
 The card's clock (`now`) is the time in the newest block header it has taken
 ([SET_HEADER](#set_header-0x36), [REFRESH](#refresh-0x53), the anchored
-[SET_OWNER](#set_owner-0x43)), and it only moves forward. Three limits, all the
+[SET_OWNER](#set_owner-0x43)), and it only moves forward. Each header carries at
+least a quarter of a block's work ([SET_HEADER](#set_header-0x36)), so a forger
+spends that much for every day it buys. Three limits, all the
 owner's ([SET_LIMIT](#set_limit-0x34)), all off on a new card:
 
 - **The daily limit** bounds what leaves the card in the day's window: 86,400
@@ -829,6 +847,13 @@ or given up before its signature). A window also begins, as in 2.0, at the first
 header after a limit set with no clock and at a `SET_LIMIT` that changes the day's
 number; neither is a roll. The roll, the day's count and the payment's burn are one
 transaction.
+
+What a card risks follows from these limits. A terminal handed the PIN takes at
+most the daily limit in each window, for as many windows as the rollover budget
+allows between the owner's refreshes, and it can change nothing of the owner's:
+the PIN, the limits, the record or the owner. A lost card is lost money up to its
+limits for whoever learns its PIN, and up to its no-PIN allowance, once per
+arming, for anyone.
 
 ---
 
@@ -882,7 +907,7 @@ Total:  82 bytes per slot × 128 slots
 ```
 
 The secret the card rebuilds, and signs the hash of within the `SIG_ALL` message,
-is [NUT-XX](NUT-XX.md)'s format-4 secret. A piece loaded with the mint's proof also
+is NUT-CCP's format-4 [card proof secret](https://github.com/cashucard/nut/blob/main/CCP.md#card-proofs). A piece loaded with the mint's proof also
 has 96 bytes (`e ‖ s ‖ r`) beside its slot ([GET_DLEQ](#get_dleq-0x1a)).
 
 ---
