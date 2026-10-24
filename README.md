@@ -171,7 +171,7 @@ docs/                   vision, architecture, decisions, security, glossary, Fox
 ## Related
 
 - [getfoxy/card](https://github.com/getfoxy/card) — Foxy's fork, the base of 2.0
-- [cashu-client](https://github.com/lnflash/cashu-client) — mint protocol, BDHKE, witnesses, DLEQ
+- [cashu-client](https://github.com/cashucard/client) — mint protocol, BDHKE, witnesses, DLEQ
 - [flash-card-assets](https://github.com/lnflash/flash-card-assets) — print-ready physical card design
 - [forge.flashapp.me](https://forge.flashapp.me) — the Flash Cashu mint ([reserves](https://forge.flashapp.me/reserves))
 - [cashubtc/nuts](https://github.com/cashubtc/nuts) — the Cashu specifications

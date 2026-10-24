@@ -14,7 +14,7 @@ Five components across four repositories plus a running mint:
 |---|---|---|---|
 | **Applet** — the card firmware | [`cashu-javacard`](https://github.com/cashucard/javacard) `applet/` | JavaCard | **Hardware-proven** — selftest 10/10; load/spend/melt/PIN all run on silicon (see the [test report](HARDWARE_TEST_REPORT_2026-09-22.j3r180.md)) |
 | **cardctl** — host driver | [`cashu-javacard`](https://github.com/cashucard/javacard) `tools/cardctl/` | Python | Proven against a real card (ACR122U) |
-| **cashu-client** — mint protocol | [`cashu-client`](https://github.com/lnflash/cashu-client) | TypeScript | Load + redeem implemented; both proven end-to-end on hardware via `tools/e2e-*.cjs` |
+| **cashu-client** — mint protocol | [`cashu-client`](https://github.com/cashucard/client) | TypeScript | Load + redeem implemented; both proven end-to-end on hardware via `tools/e2e-*.cjs` |
 | **Card artwork** — physical design | [`flash-card-assets`](https://github.com/lnflash/flash-card-assets) | SVG/PDF | Draft v1, not released to plate |
 | **Flash Forge** — the mint | `forge.flashapp.me` | Nutshell (Python) | **Live, solvent, in production** |
 | **Merchant terminal** | [`flash-pos`](https://github.com/lnflash/flash-pos) | React Native | Read path (`SELECT/GET_INFO/GET_PUBKEY/GET_BALANCE`) **hardware-validated on iOS**; spend wiring pending — the offline settlement queue (#68) is merged and waiting for it |

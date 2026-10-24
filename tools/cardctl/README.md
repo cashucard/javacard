@@ -183,7 +183,7 @@ cashu-client's `serializeCardFile` / `parseCardFile`. `test_card_file.py` parses
 the spec and asserts this driver's parser and writer against the published field
 tables, so a rename on this side fails in CI rather than at a card reader.
 
-> **The two halves do not interoperate yet.** cashu-client (`lnflash/cashu-client#5`)
+> **The two halves do not interoperate yet.** cashu-client (`cashucard/client#5`)
 > does not know the `spent` field and rejects any key outside its allowlist, so
 > today it refuses what `dump` writes and `load-file` refuses what it writes.
 > The spec's status note has the details; the two changes must merge together.

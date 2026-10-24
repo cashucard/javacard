@@ -2,7 +2,7 @@
 
 ## `card-file-v1.json`
 
-A v1 card file, regenerated through the `lnflash/cashu-client#5` toolchain and
+A v1 card file, regenerated through the `cashucard/client#5` toolchain and
 verified **accepted by that branch's `parseCardFile`** — parseCardFile-accepts,
 not serializeCardFile-wrote: `serializeCardFile` refuses `spent: true` by
 design (that direction ends at LOAD_PROOF, which has no spent bit), so no

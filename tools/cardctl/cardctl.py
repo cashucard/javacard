@@ -889,7 +889,7 @@ def cmd_load(args) -> int:
 
 # ── card file (interchange with cashu-client) ─────────────────────────────────
 #
-# The mint protocol lives in TypeScript (lnflash/cashu-client) and this driver
+# The mint protocol lives in TypeScript (cashucard/client) and this driver
 # is Python, so proofs cross the boundary as a file. The schema is defined once,
 # in cashu-client's `src/cardFile.ts`; this is the other half of it.
 #

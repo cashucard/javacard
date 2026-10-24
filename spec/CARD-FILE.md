@@ -8,7 +8,7 @@
 > card. The format is kept for the sweep of 0.x cards (`docs/HARDWARE_DEPLOYMENT.md`)
 > and for cashu-client's reader of existing files; a 2.0 card file would be a v2.
 
-The mint protocol lives in TypeScript (`lnflash/cashu-client`) and the host-side
+The mint protocol lives in TypeScript (`cashucard/client`) and the host-side
 driver is Python (`tools/cardctl`). Proofs cross that boundary as a JSON file:
 `cardctl dump` writes one off a card, `cardctl load-file` writes one onto a card,
 and `serializeCardFile` / `parseCardFile` in cashu-client do the same on the
@@ -27,7 +27,7 @@ wrong model — a NUT-10 P2PK secret is ~150 bytes of JSON and cannot live in a
 32-byte slot field.
 
 > **Status: v1 is not final until both halves ship it.**
-> `spent` (below) now exists on both sides: `lnflash/cashu-client#5` — the other
+> `spent` (below) now exists on both sides: `cashucard/client#5` — the other
 > half of v1 — carries it in its `SLOT_FIELDS` allowlist, its slot type and
 > `parseCardSlot`, and has adopted the `amount < 2^32` bound
 > (`MAX_CARD_AMOUNT`) that the card's 4-byte field makes the real one. Its
