@@ -14,7 +14,7 @@ GlobalPlatform packaging and deployment for the Cashu card applet, protocol 2.1
 | GlobalPlatformPro (gp) | 20.01.23+ | See below |
 | JavaCard SDK | 3.0.5+ (`jc305u4_kit`) | See [Build the .cap file](#build-the-cap-file) |
 | Python 3 | 3.9+ | for `tools/stripcap.py` and `tools/refcheck.py`, which the build runs |
-| Physical card | NXP JCOP4 SmartMX3 (JavaCard 3.0.5+) | **Not** JavaCard 3.0.4 — see [Supported targets](#supported-targets) |
+| Physical card | NXP JCOP4 SmartMX3 (JavaCard 3.0.5+) | JavaCard 3.0.5 or later; see [Supported targets](#supported-targets) |
 | PC/SC reader | Any ISO 7816-4 reader | `brew install pcsc-lite` |
 
 ### Install GlobalPlatformPro
@@ -36,8 +36,8 @@ chmod +x /usr/local/bin/gp
 
 ## Build the .cap file
 
-ant-javacard does **not** download JavaCard SDKs — you have to supply the kit
-yourself and point `jc.sdk` at it. One clone covers every SDK version:
+ant-javacard does not download JavaCard SDKs. Supply the kit yourself and point
+`jc.sdk` at it. One clone covers every SDK version:
 
 ```bash
 # One-time: fetch the JavaCard SDK kits (~200 MB, all versions)
@@ -48,7 +48,7 @@ git clone https://github.com/martinpaljak/oracle_javacard_sdks ~/.javacard/sdks
 cd cashu-javacard/applet
 
 # Build. jc.sdk defaults to ~/.javacard/sdks/jc305u4_kit; override if you
-# cloned elsewhere. It must be a 3.0.5 (or later) kit — see below.
+# cloned elsewhere. It must be a 3.0.5 (or later) kit: see below.
 ant cap
 ant cap -Djc.sdk=/path/to/jc305u4_kit   # explicit form
 
@@ -308,7 +308,7 @@ suspect, after the size of the load file (above).
 | Card | JC API | Notes |
 |------|--------|-------|
 | NXP JCOP4 SmartMX3 P71 (J3R180) | 3.0.5 | ✅ Primary target; secp256k1 custom curve supported |
-| Feitian JavaCard 3.0.4 | 3.0.4 | ❌ No `ALG_EC_SVDP_DH_PLAIN_XY` (3.0.5+ only) — the CAP will not convert or load |
+| Feitian JavaCard 3.0.4 | 3.0.4 | ❌ `ALG_EC_SVDP_DH_PLAIN_XY` is available in 3.0.5+; this CAP requires it |
 | Generic JC 3.0.5+ | 3.0.5 | ⚠️  May work; verify custom EC-FP curve + `ALG_EC_SVDP_DH_PLAIN_XY` support |
 | JavaCard ≤ 3.0.4 | ≤ 3.0.4 | ❌ No ECDH plain-XY |
 | JavaCard 2.2.x | 2.2 | ❌ No `int` type; no ECDH plain-XY |

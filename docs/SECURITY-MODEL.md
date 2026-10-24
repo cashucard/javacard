@@ -1,12 +1,18 @@
 # Security model
 
-What this card protects, what it does not, and which weaknesses are accepted
-versus unresolved.
+> **Historical implementation snapshot.** This page records an earlier project
+> milestone. Use the [current architecture](https://github.com/cashucard/cashucard/blob/main/docs/ARCHITECTURE.md)
+> and [security model](https://github.com/cashucard/cashucard/blob/main/docs/SECURITY-MODEL.md)
+> for current component boundaries, hardware evidence and outstanding work.
+
+Threats, controls, accepted weaknesses and unresolved issues for this card.
 
 Written to be usable by an auditor. Where something is untested, it says so
 rather than asserting a property nobody has measured.
 
-## The one guarantee
+<a id="the-one-guarantee"></a>
+
+## Spending-key guarantee
 
 **A proof cannot be redeemed without a signature from the card that holds it.**
 
@@ -19,22 +25,22 @@ get around it rather than through it.
 
 | # | Threat | Protected? | Notes |
 |---|---|---|---|
-| 1 | Passive read of card memory | **Partially** | An attacker gets keyset id, amount, nonce and `C` — the secret string is never stored on the card, but it is reconstructible from the nonce plus the card pubkey, so treat it as leaked too. What does not leak is the private key, so the proofs stay unspendable. Balance and history leak. From software 1.20 a reader also gets the mint's proof for each unspent piece that has one, and so its blinding factor (#16). |
+| 1 | Passive read of card memory | **Partially** | An attacker gets keyset id, amount, nonce and `C`. The secret string is never stored on the card, but it is reconstructible from the nonce plus the card pubkey, so treat it as leaked too. The private key stays on the card, so the reader cannot spend the proofs. Balance and history leak. From software 1.20 a reader also gets the mint's proof for each unspent piece that has one, and so its blinding factor (#16). |
 | 2 | Hostile reader spends the card | **Up to the owner's limits** (2.0) | A payment (`SPEND_ALL_SIGN`) needs the PIN given in this tap, or fits the no-PIN allowance, or the card has no PIN; a failed PIN check ends the session. A blocked card has no allowance, by its state byte or by its counter ([D22](DECISIONS.md#d22)). What leaves the card is held to the daily limit, counted against a clock of Bitcoin block headers, and the window rolls at most the rollover budget's times between the owner's refreshes (#17, [D20](DECISIONS.md#d20)). A card with no PIN is cash to whoever holds it, under the same limits. |
 | 3 | Card lost or destroyed | ❌ **By design** | No seed, no backup, no recovery. See [D5](DECISIONS.md#d5). |
 | 4 | Cloning the chip | **Yes** | Cloning EEPROM copies the proofs but not the key; a clone cannot sign. Cards should be CC EAL 5+ to resist invasive extraction. |
 | 5 | Offline double-spend from copied data | ❌ **No** | Fundamental. An offline merchant cannot know a proof was already melted. See below. |
 | 6 | Replaying a signature on another proof | **Yes** | The card signs the NUT-11 `SIG_ALL` message of one payment: every input's secret and `C` and every output. A signature is good for that swap and no other, and the card rebuilds every secret from its own key and the slot, so a reader chooses nothing it signs. `AUTH` signs a tagged hash no secret can equal. There is no command that signs a reader's bytes (0.x's `SIGN_ARBITRARY` is gone, D18). |
 | 7 | Malicious mint tagging users | **Yes** | NUT-12 DLEQ, verified client-side. See [D11](DECISIONS.md#d11). |
-| 8 | Mint insolvency | **Monitored, not prevented** | The mint is trusted for solvency. See below. |
-| 9 | Malicious terminal | **Partially** | Cannot forge proofs or spend them elsewhere. Can lie about the amount, or take the tap and never settle — ordinary merchant risk. |
+| 8 | Mint insolvency | **Monitoring only; solvency is trusted** | The mint is trusted for solvency. See below. |
+| 9 | Malicious terminal | **Partially** | Cannot forge proofs or spend them elsewhere. Can lie about the amount, or take the tap and never settle; that is ordinary merchant risk. |
 | 10 | Fault injection to recover the key | **Mitigated** | Aux randomness in the nonce prevents the two-signatures-same-`k` recovery. See [D9](DECISIONS.md#d9). |
 | 11 | Tear-off (card pulled mid-write) | **Yes, by write order**; not yet on silicon | Every multi-field persistent write commits a single byte last, or is one transaction ([D14](DECISIONS.md#d14)); every write outside a transaction is listed and reviewed in [D23](DECISIONS.md#d23), and a test fails on any new one. A torn `LOAD_PROOF` leaves the slot empty and a torn `CLEAR_SPENT` leaves it spent; neither is counted or signed for. A payment's places are burned by one committed byte (`burnPending`) and marked after it, at the next command if the card left. A torn `CHANGE_PIN` leaves the card blocked, not open (D22). The orders are scanned in the source and the torn states set by hand in jCardSim; no card has been pulled mid-write. |
 | 12 | Counterfeit physical cards | **Not a concern** | Value is bound to the chip's key. A look-alike with no valid chip holds nothing. |
 | 13 | Supply-chain / pre-personalised cards | ⚠️ **Unaddressed** | Nothing currently attests that a card's key was generated on-card by an untampered applet. |
 | 14 | Hostile reader blocks the PIN (3 unauthenticated APDUs) | **Mitigated by the owner** (2.0) | `VERIFY_PIN` needs no authentication, so three wrong PINs from any reader in range block the card. The owner's phone unblocks it: `CHANGE_PIN` with the owner's proof sets a new PIN with no old one, any state, any funds, and a wrong proof costs no PIN try. A card whose owner has lost their seed cannot be unblocked; its balance is stranded. The same loss strands a card with a daily limit even if its PIN works: without `REFRESH` the window stops rolling after the rollover budget, and only about (budget + 1) daily limits can still be paid (#17, [D20](DECISIONS.md#d20)). An owner key kept only in one phone's Keychain (the architect's fallback for a user with no backed-up seed) is lost with that phone. (0.6's PUK is gone with the 0.x wire, D18.) |
 | 15 | Reading the NFC tag (software 1.19) | **Nothing of the card to read** | Any reader, with no PIN, gets the same bytes from every card: one web address. It names no card, key, owner or balance. A card on factory keys can have the tag's applet replaced by one carrying another address; rotating the card manager keys closes that. See below. |
-| 16 | A piece on the card that the mint never made (software 1.20) | **Checked by the reader, not by the card** | The card keeps the mint's NUT-12 proof for a piece and gives it back; it checks nothing. A reader that checks it, with the mint's keys, sees that a made-up `C` is not real, and a piece copied from another card is not real here. It does not show that a real piece is unspent. Reading the proof gives away `r`, which ties a piece to the request that made it if the mint is given it. See below. |
+| 16 | A piece on the card that the mint never made (software 1.20) | **Reader-side verification** | The card keeps the mint's NUT-12 proof for a piece and gives it back; it checks nothing. A reader that checks it, with the mint's keys, sees that a made-up `C` is not real, and a piece copied from another card is not real here. It does not show that a real piece is unspent. Reading the proof gives away `r`, which ties a piece to the request that made it if the mint is given it. See below. |
 | 17 | A terminal with the PIN walks the card's clock with real block headers | **Bounded by the rollover budget** (2.0) | Real headers are free, so in 1.20 every header a day later began a new day and a new limit. In 2.0 the window rolls at most the rollover budget's times (default 7) between the owner's `REFRESH`es; past it the day stands. The no-PIN allowance renews only once per arming (a PIN or an owner's proof), so a reader with no PIN gets one allowance per arming. [D20](DECISIONS.md#d20). **The cost:** the bound also binds the holder. In 1.20 a holder who lost the owner key could still spend the card down a limit a day; in 2.0, with no owner's proof to refresh the budget, the window stays where it is after the budget's rolls, and a balance over about (budget + 1) daily limits is stranded for good. A card with no daily limit is not affected. |
 | 18 | An unowned empty card is claimed by the first phone that sets it up | **Accepted for v1** | A card out of its packet has no owner and holds nothing, so any reader in range can give it a PIN, a record and an owner of its own (`SET_OWNER`, no proof). Nothing is lost: the card cannot be loaded until it has an owner. A card set up in its holder's hands, by the holder's phone ("Set up this card"), is that holder's; cards issued by Flash leave the issuer owned or are set up at hand-over. A claimed card is reset by its claimant only. |
 | 19 | Timing the card's signatures to learn its key | **Partially**: the multiplies only; not measured | `AUTH` gives any reader as many timed signatures as it asks for. The two byte-array field multiplies on the nonce and the key have no secret-dependent branch ([D21](DECISIONS.md#d21)). The modular reductions on the same path still do (`reduce512toModN`, `addModN`, `reduceModN`, `sub32`, `cmp32`; open item 5). The chip's EC and RSA engines, which do the point multiply, are NXP's. No timing has been measured on silicon. |
@@ -45,17 +51,16 @@ The card marks a proof `SPENT` before releasing a signature, and no APDU can
 unmark it. **That stops the card from spending twice. It does not stop anything
 else.**
 
-If an attacker copies a proof's data and separately obtains a signature over it,
-they can redeem at the mint while the card still shows the proof unspent — or,
-more simply, spend at an offline merchant who cannot check, then redeem the same
-proof online before that merchant settles.
+An attacker who copies proof data and obtains a signature can redeem it at the
+mint while the card still shows the proof unspent. The attacker can also spend
+the proof at an offline merchant and redeem it online before that merchant settles.
 
 **This is inherent to every offline bearer instrument.** Physical cash addresses
 it with anti-counterfeiting rather than double-spend detection, and so must this.
 
 Practical mitigations, none of them cryptographic:
 
-- The **mint is the final authority** — the second redemption fails.
+- The **mint is the final authority:** it rejects a second redemption.
 - **Terminals should settle promptly** on regaining connectivity. Settlement lag
   is exactly the exposure window.
 - **Online terminals must call `checkProofStates`** before accepting. There is
@@ -72,8 +77,8 @@ document exists.
 A bearer proof is a claim on the mint. If the mint cannot honour it, the proof
 is worthless regardless of how sound the cryptography is.
 
-This is not hypothetical here. Flash Forge was found **insolvent** — roughly
-$831 of outstanding bearer promises against $0.13 of backing — because the
+Flash Forge was found **insolvent**, with roughly $831 of outstanding bearer
+promises against $0.13 of backing, because the
 Lightning backends had been drained while the ecash stayed in circulation.
 
 Current controls:
@@ -84,9 +89,9 @@ Current controls:
 - The mint's sat reserve is a **self-hosted phoenixd node** rather than a
   third-party custodial account.
 
-Honest limits: this is an **operator attestation**, not a trustless proof of
-reserves. A holder cannot cryptographically verify it. Signed attestations from
-the reserve wallets would be the next step.
+The reserve page is an **operator attestation**; holders cannot cryptographically
+verify its completeness or solvency. Signed statements from reserve wallets
+remain a proposed next step.
 
 ## The PIN, the owner, and the blocked PIN (#2, #14)
 
@@ -285,22 +290,22 @@ An earlier card, a J3R452 on applet 0.1, ran the read and sign path on
 **Two bugs found in review were invisible to the simulator and would each have
 been fatal in the field:** a dropped carry in the modular reduction that made
 every signature invalid, and an EEPROM leak that would have bricked cards after
-a few hundred taps. Treat simulator results accordingly — see
+a few hundred taps. Treat simulator results accordingly; see
 [D10](DECISIONS.md#d10).
 
 ## Open items
 
-1. **2.0 on silicon** — install the 2.0 CAP on the J3R180, `cardctl selftest` and
+1. **2.0 on silicon:** install the 2.0 CAP on the J3R180, `cardctl selftest` and
    `--timing` (the multiply changed, D21), then the field-card sweep and reinstall
    (`HARDWARE_DEPLOYMENT.md`). Operator-run, with the card.
-2. **Tear-off on silicon** (#11) — the write orders are analysed and enforced
+2. **Tear-off on silicon** (#11): the write orders are analysed and enforced
    ([D14](DECISIONS.md#d14), [D23](DECISIONS.md#d23)); pulling a card mid-load,
    mid-clear, mid-payment and mid-`CHANGE_PIN` on hardware is still owed.
-3. **Recovery** (#3) — the dated refund path is in the applet and switched off in
+3. **Recovery** (#3): the dated refund path is in the applet and switched off in
    the apps; see [D5](DECISIONS.md#d5) and `FOXY-CARD-SPEC.md` 6.
-4. **Card attestation** (#13) — no proof a key was generated on-card by genuine
+4. **Card attestation** (#13): no proof a key was generated on-card by genuine
    firmware.
-5. **Side-channel review** of `SchnorrHW` — the modular arithmetic was written
+5. **Side-channel review** of `SchnorrHW`: the modular arithmetic was written
    for correctness. Since 2.0 the two byte-array multiplies (`mul256x256`,
    `mulByDelta`) have no secret-dependent branch ([D21](DECISIONS.md#d21)).
    The reductions on the signing path still branch on values derived from the
@@ -318,7 +323,7 @@ a few hundred taps. Treat simulator results accordingly — see
    source as the multiplies are (`SchnorrHWMathTest` holds this list to the
    source). Nothing has been measured on silicon, and the chip's own EC and RSA
    engines are not ours to analyse.
-6. **Trustless proof of reserves** — upgrade the attestation to signed
+6. **Trustless proof of reserves:** upgrade the attestation to signed
    statements from the reserve wallets.
 
 ## Reporting a vulnerability

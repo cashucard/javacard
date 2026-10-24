@@ -1,4 +1,6 @@
-# Card File — interchange format v1
+<a id="card-file--interchange-format-v1"></a>
+
+# Card File: interchange format v1
 
 > **0.x only.** A card file describes the pieces of a card on the 0.x applet
 > (AID `D2 76 00 00 85 01 02`): a 78-byte slot with no date, whose secret is the
@@ -14,36 +16,18 @@ driver is Python (`tools/cardctl`). Proofs cross that boundary as a JSON file:
 and `serializeCardFile` / `parseCardFile` in cashu-client do the same on the
 other side.
 
-This document is the contract. It exists for the same reason `APDU.md` does:
-this repo's characteristic bug is not a crash, it is a document and an
-implementation drifting apart while both look fine on their own. A file that two
-implementations disagree about is bearer money nobody can spend, so the field
-names below are asserted against the parser on every push
-(`tools/cardctl/test_card_file.py`) rather than trusted.
+The field names and validation rules below define the shared contract. Tests in
+`tools/cardctl/test_card_file.py` check the parser and writer against these tables.
+The file carries the card's 32-byte `nonce` and 16-character hex `keysetId`.
+A reader reconstructs the NUT-10 P2PK secret from the nonce and `cardPubkey`.
+The full secret is about 150 bytes of JSON; the card's nonce field holds 32 bytes.
 
-The vocabulary is the **card's**, not the mint's: `nonce`, not `secret`, and a
-16-hex-character `keysetId`. A file that says `secret` was written against a
-wrong model — a NUT-10 P2PK secret is ~150 bytes of JSON and cannot live in a
-32-byte slot field.
-
-> **Status: v1 is not final until both halves ship it.**
-> `spent` (below) now exists on both sides: `cashucard/client#5` — the other
-> half of v1 — carries it in its `SLOT_FIELDS` allowlist, its slot type and
-> `parseCardSlot`, and has adopted the `amount < 2^32` bound
-> (`MAX_CARD_AMOUNT`) that the card's 4-byte field makes the real one. Its
-> `serializeCardFile` emits the field too — while refusing `spent: true`
-> outright, because that direction ends at `LOAD_PROOF`, which cannot carry the
-> bit; full dumps with spent slots are `cardctl dump`'s side of the format.
-> `tools/cardctl/testdata/card-file-v1.json` was regenerated with that branch's
-> toolchain, so the fixture is once again a file the TypeScript side's
-> `parseCardFile` accepts.
->
-> But agreement on a branch is not agreement on `main`. Until #5 lands, `main`'s
-> `parseCardFile` still rejects `spent` as an unknown field — merged alone, this
-> PR puts a tool on `main` whose dump output the shipped cashu-client refuses,
-> and whose load-file refuses `serializeCardFile`'s output, in both directions.
-> **Neither PR may merge alone.** The pair lands together, or v1 ships without
-> `spent` on both sides and gains it as v2.
+> **Implementation status.** [cashucard/client#5](https://github.com/cashucard/client/pull/5)
+> merged on 28 August 2026. Both implementations carry `spent` and enforce
+> `0 < amount < 2^32`. `serializeCardFile` rejects `spent: true` because
+> `LOAD_PROOF` has no spent bit. `cardctl dump` preserves spent slots for recovery.
+> The fixture in `tools/cardctl/testdata/card-file-v1.json` was regenerated with
+> that change's TypeScript toolchain and accepted by its `parseCardFile`.
 
 ---
 
@@ -74,27 +58,20 @@ wrong model — a NUT-10 P2PK secret is ~150 bytes of JSON and cannot live in a
 | `unit` | string | yes | Keyset unit, e.g. `sat`. Non-empty. |
 | `cardPubkey` | string | yes | The card's 33-byte compressed secp256k1 public key, 66 hex chars, `02`/`03` prefix. Proofs are P2PK-locked to this key. |
 | `slots` | array | yes | Zero or more slot objects, in card slot order. |
-| `note` | string | no | Free-form provenance for a human. Never trusted, never acted on. `cardctl dump` emits one; a reader must tolerate its absence. |
+| `note` | string | no | Free-form provenance for a human. Untrusted display text; readers must not execute it or use it to authorize actions. `cardctl dump` emits one; a reader must tolerate its absence. |
 
-**Readers reject any key not listed above, at document *and* slot level.** There
-is no ignore-and-continue: silently dropping an unrecognised field is exactly
-the drift this format exists to prevent — a writer adds a field, forgets to bump
-`version`, and the other side discards it without a word. The failure then
-surfaces at the mint, or as money that quietly went nowhere. `version` is the
-mechanism for adding a field; an allowlist is what forces its use.
-
-`note` is the one optional key, and it is on the list. Anything else — including
-a field a future revision genuinely needs — is a hard boundary failure until it
-appears here with a version bump.
+**Readers reject keys outside the document and slot field lists.** Additions
+require a `version` bump so both implementations can validate the same schema.
+`note` is the only optional key.
 
 ## Slot
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `keysetId` | string | yes | NUT-02 **v0** keyset id: 8 raw bytes, written as exactly 16 hex chars, first byte `00`. Eight chars is half an id and a proof carrying it matches no keyset at the mint; a non-`00` version byte is not a v0 id and is refused rather than guessed at. |
-| `amount` | integer | yes | Proof amount: a **positive power of two**, and `0 < amount < 2^32`. A mint keyset has no key for amount 3, so a non-power-of-two proof is rejected on redemption — after the slot is burned. The upper bound is the card's field width: `LOAD_PROOF` carries the amount as a 4-byte unsigned integer. |
-| `nonce` | string | yes | The 32-byte P2PK nonce, 64 hex chars. **Not** the NUT-10 secret string — a reader rebuilds that from the nonce plus `cardPubkey`. |
-| `C` | string | yes | The mint's 33-byte compressed signature point, 66 hex chars, `02`/`03` prefix, x-coordinate **on the secp256k1 curve**. A prefix check alone accepts ~half of all random x values, and an off-curve C is a proof nothing can ever spend — loaded anyway, it burns a slot. |
+| `amount` | integer | yes | Proof amount: a **positive power of two**, and `0 < amount < 2^32`. A mint keyset has no key for amount 3, so a non-power-of-two proof is rejected on redemption after the slot is burned. The upper bound is the card's field width: `LOAD_PROOF` carries the amount as a 4-byte unsigned integer. |
+| `nonce` | string | yes | The 32-byte P2PK nonce, 64 hex chars. A reader rebuilds the NUT-10 secret string from this nonce plus `cardPubkey`. |
+| `C` | string | yes | The mint's 33-byte compressed signature point, 66 hex chars, `02`/`03` prefix, x-coordinate **on the secp256k1 curve**. A prefix check alone accepts ~half of all random x values, and an off-curve `C` produces an invalid proof and consumes a slot if loaded. |
 | `spent` | boolean | yes | Whether the card has already marked this slot spent. |
 
 A reader MUST refuse a file carrying the same `nonce` twice or the same `C`
@@ -106,7 +83,7 @@ written. Both implementations enforce this; a third written from this document
 must too.
 
 Hex is case-insensitive on read and lower-case on write, and prefixes are never
-written. Prefix *tolerance* is not part of the format — it is one-sided:
+written. Prefix tolerance differs between implementations:
 `cardctl`'s reader strips a `0x`/`0X` prefix, but cashu-client's `requireHex`
 requires bare hex (`/^[0-9a-f]+$/` after lowercasing), so a hand-authored
 prefixed file is accepted by the Python half and refused by the TypeScript
@@ -114,19 +91,20 @@ half. **Never write prefixes.** The case claim and cardctl's prefix tolerance
 are asserted by `test_card_file.py` (`test_normalises_hex_case`,
 `test_tolerates_0x_prefixes_in_any_case`) rather than trusted.
 
-### Why `spent` is required and not defaulted
+<a id="why-spent-is-required-and-not-defaulted"></a>
 
-A spent slot is still *owed* until it settles at the mint, so a dump keeps it —
-dropping it loses money (the one exception, a spent slot whose data fails the
+### Required spent state
+
+A spent slot is still *owed* until it settles at the mint, so a dump keeps it.
+Dropping it loses money (the one exception, a spent slot whose data fails the
 slot checks, is under [Writers validate too](#writers-validate-too)). But the
 redeemer has to be able to tell the two kinds apart, and a card cannot:
 `LOAD_PROOF` has no spent bit, so a spent proof written back onto a card comes
 back as unspent and inflates the balance with money that is already gone.
 
 Defaulting a missing `spent` to `false` reintroduces exactly that. A file
-written by an implementation that does not know about the field is not a file
-whose proofs are all unspent — it is a file whose state is unknown, and the
-right response is to refuse it. Hence: required, no default.
+with a missing `spent` field has unknown state. Readers refuse it; the field is
+required and has no default.
 
 `cardctl load-file` skips any slot with `"spent": true`. It also refuses to call
 a slot "already loaded" when the card has already burned that nonce: a stale
@@ -142,13 +120,13 @@ forward-compatibility window: a reader accepts the versions it knows and
 refuses the rest by number.
 
 JSON has one number type, so `"version": 1.0` reaches a JavaScript reader as
-the number 1 — `JSON.parse` cannot preserve the distinction. Readers therefore
+the number 1; `JSON.parse` cannot preserve the distinction. Readers therefore
 treat an integral float as its integer value (cardctl collapses `1.0` to `1`
 explicitly; cashu-client gets this from `JSON.parse` for free). A non-integral
 version (`1.5`) is refused by both halves. Writers emit a bare integer.
 
 Additive-looking changes still require a bump, because "field absent" and
-"field present and false" are different claims about money — see above.
+"field present and false" are different claims about the proof state.
 
 ## Cross-implementation checks
 
@@ -156,24 +134,22 @@ Additive-looking changes still require a bump, because "field absent" and
   the names `cardctl`'s parser requires, and the names its writer emits, are
   exactly the names published here. A rename on the Python side fails in CI.
 - `tools/cardctl/testdata/card-file-v1.json` is a fixture generated with
-  cashu-client's `#5`-branch toolchain — the version that knows `spent` — kept
-  so the Python side is checked against a file the TypeScript side accepts,
-  not only against prose. Any future schema change regenerates it through that
-  toolchain as part of the paired change, not as optional cleanup.
-- **Not yet true, and required before v1 ships:** cashu-client asserting these
-  same tables from its own suite. Today it holds its own copies of the field
-  lists and does not read this document, so the "contract" is enforced on the
-  Python side only. Until that lands, the fixture proves one file parsed once
-  and nothing more.
+  the TypeScript toolchain from cashu-client PR #5, which supports `spent`.
+  It checks the Python side against a file accepted by the TypeScript parser.
+  Regenerate it through that toolchain as part of a paired schema change.
+- The TypeScript suite pins its parser and writer field lists locally. It does
+  not read these tables, so a cross-repository schema change still requires
+  coordinated review. The fixture records a file accepted by that toolchain;
+  it does not establish that every future change is compatible.
 
-## Writers validate too
+<a id="writers-validate-too"></a>
+
+## Writer validation
 
 `cardctl dump` runs the document it assembled through the same validator
 `cardctl load-file` uses before writing a byte, and cashu-client's
-`serializeCardFile` round-trips through `parseCardFile`. A writer that emits
-what its own reader refuses turns one schema into two behaviours — and the file
-it produced is the card's only off-card record, so the discrepancy is found
-long after the card has moved on.
+`serializeCardFile` round-trips through `parseCardFile`. This keeps each implementation's reader and writer on the same schema before
+the file becomes an off-card recovery record.
 
 One kind of spent slot is left out rather than refused. A card pulled
 mid-`CLEAR_SPENT` leaves a slot that still reads spent with some of its fields

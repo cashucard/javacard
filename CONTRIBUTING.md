@@ -1,14 +1,18 @@
 # Contributing to cashu-javacard
 
+> **Historical applet snapshot:** repository status and project gaps on this page
+> describe an earlier milestone. See the [current Cashu Card guide](https://github.com/cashucard/cashucard#readme)
+> for the current product and integration status.
+
 An open-source implementation of [NUT-CCP: Cashu Card Protocol](https://github.com/cashucard/nut).
-Contributions are welcome — including from people who have never touched a
+Contributions are welcome, including from people who have never touched a
 smartcard before.
 
 **Read [`docs/DECISIONS.md`](docs/DECISIONS.md) before proposing a change to how
-the product behaves.** Most of what looks like a missing feature — recovery, a
-cardholder name, a PIN on spending — is a decision with reasoning behind it, and
-several were made after getting it wrong once. Arguing against a decision is
-welcome; not knowing it exists wastes your time.
+the product behaves.** Recovery, a cardholder name and a PIN on spending are
+decisions with documented reasoning. Some decisions followed an earlier
+mistake. Arguing against a decision is welcome; cite the entry so discussion
+starts with its rationale.
 
 ## Pick your path
 
@@ -32,7 +36,7 @@ Genuinely useful without hardware:
 >
 > If you write docs here, the bar is **verifiable accuracy**. Every one of those
 > ten submissions confidently described a merchant tap-to-pay flow that does not
-> exist, and repeated a hardware compatibility claim that was wrong — because
+> exist, and repeated a hardware compatibility claim that was wrong, because
 > our own README told them so. Some invented terminal output and quoted
 > performance figures for code that had never run.
 >
@@ -49,10 +53,10 @@ Then pick a layer:
 
 | Layer | Language | Hardware needed |
 |---|---|---|
-| Applet (`applet/`) | JavaCard | No — jCardSim |
+| Applet (`applet/`) | JavaCard | No (jCardSim) |
 | Host driver (`tools/cardctl/`) | Python | Only for `selftest` |
 | Mint protocol ([cashu-client](https://github.com/cashucard/client)) | TypeScript | No |
-| **Merchant terminal** | — | **Nobody is building this. It is the biggest gap.** |
+| **Merchant terminal** | **TBD** | **The biggest project gap; development has not started.** |
 
 ### AI agent
 
@@ -63,11 +67,11 @@ more here than in an ordinary repo:
 
 1. **JavaCard is not Java.** No `long`, no `BigInteger`, no `String` at runtime,
    no collections, no garbage collector. Code that compiles under `javac` can
-   still be rejected by the CAP converter — or, worse, convert cleanly and leak
+   still be rejected by the CAP converter, or, worse, convert cleanly and leak
    EEPROM on every tap.
 2. **A green test suite is not evidence about silicon.** jCardSim runs on the
    JVM. It cannot reproduce EEPROM exhaustion, ECDH output framing, or a card
-   whose `getS` returns short — all real bugs found here.
+   whose `getS` returns short, all real bugs found here.
 3. **Do not assert what you did not verify.** If you did not run it, say so.
 
 ## Development setup
@@ -76,10 +80,10 @@ more here than in an ordinary repo:
 
 - JDK 11+
 - Maven 3.8+ (tests) and Apache Ant 1.10+ (CAP build)
-- JavaCard SDK 3.0.5+ — `git clone https://github.com/martinpaljak/oracle_javacard_sdks ~/.javacard/sdks`
+- JavaCard SDK 3.0.5+, `git clone https://github.com/martinpaljak/oracle_javacard_sdks ~/.javacard/sdks`
   (3.0.4 is **not** sufficient: `ALG_EC_SVDP_DH_PLAIN_XY` is 3.0.5+)
 - jCardSim (pulled in by Maven; no hardware required for tests)
-- Python 3.11+ for `tools/cardctl` — **not** macOS system Python 3.9, whose
+- Python 3.11+ for `tools/cardctl`, **not** macOS system Python 3.9, whose
   `pyscard` build fails at import
 
 ### Running tests

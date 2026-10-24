@@ -1,5 +1,7 @@
 > This is upstream's own report of their applet on their hardware (cashucard/javacard), kept as received. It is not a report on the Foxy fork.
 
+> 本报告仅规范化了分隔符标点；记录的命令、数值、结果和结论保持不变。
+
 # Cashu JavaCard 实体硬件测试报告
 
 - **测试日期：** 2026-09-01（UTC+08:00）
@@ -138,11 +140,11 @@ all tests passed
 成功的检查：
 
 ```text
-PASS  SELECT applet — version 0.1
-PASS  GET_INFO — v0.1, 32 slots, PIN unset
-PASS  Schnorr capability advertised — caps=0x07
-PASS  GET_BALANCE — 0
-PASS  GET_SLOT_STATUS — 32 status bytes
+PASS  SELECT applet: version 0.1
+PASS  GET_INFO: v0.1, 32 slots, PIN unset
+PASS  Schnorr capability advertised: caps=0x07
+PASS  GET_BALANCE: 0
+PASS  GET_SLOT_STATUS: 32 status bytes
 ```
 
 SELECT APDU：
@@ -179,7 +181,7 @@ balance       : 0
 实际响应为 65 字节、`0x04` 前缀的非压缩 secp256k1 公钥。`cardctl selftest` 记录：
 
 ```text
-FAIL  GET_PUBKEY well-formed — 042f3253009b4481805a… (65 bytes)
+FAIL  GET_PUBKEY well-formed: 042f3253009b4481805a… (65 bytes)
 ```
 
 随后在进行 BIP-340 验证时异常退出：
@@ -210,7 +212,7 @@ ValueError: not a compressed secp256k1 pubkey: 65 bytes
 
 ```text
 applet version   : 0.1
-slots            : 32 total — 0 unspent, 0 spent, 32 empty
+slots            : 32 total: 0 unspent, 0 spent, 32 empty
 capabilities     : 0x07 (secp256k1 native=True, schnorr=True)
 PIN              : unset
 balance          : 0

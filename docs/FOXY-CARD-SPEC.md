@@ -1,12 +1,14 @@
-# Foxy card: a specification for forking cashu-javacard
+<a id="foxy-card-a-specification-for-forking-cashu-javacard"></a>
 
-> **Merged into cashu-javacard as protocol 2.0 (ENG-673, [DECISIONS D18](DECISIONS.md#d18)).** This
-> document is Foxy's, as it stood at software 1.20, kept for its design and its
-> reasons. On the 2.0 wire the AID is `F0 43 41 53 48 55 43 41 52 44` (not
-> `F0 FOXYCARD`), `SELECT` answers `02 01`, every `FoxyCard/…` label is
-> `CashuCard/…`, and D20 to D26 add to it (the rollover budget and `REFRESH`, the
-> anchored owner, and the fixes). Where this and [`spec/APDU.md`](../spec/APDU.md) differ, the
-> spec is the 2.0 wire.
+# Foxy card specification (historical)
+
+> Historical Foxy design, recorded at software 1.20 and incorporated into
+> shared protocol 2.0 ([D18](DECISIONS.md#d18)). The current applet wire is
+> [protocol 2.1](../spec/APDU.md): readers SELECT the full applet AID
+> `F043415348554341524401`, which answers `02 01`. Owner labels use
+> `CashuCard/…`; [D20](DECISIONS.md#d20) through [D26](DECISIONS.md#d26)
+> record the shared protocol changes. Use the current APDU reference when
+> implementing a reader.
 
 A card that holds ecash and pays a Foxy by a tap, and the changes to make in a
 fork of `cashucard/javacard` and in Foxy to get there.
@@ -18,7 +20,9 @@ draft had an allowance that only went down and an owner secret given to the
 card; both are gone, and where the two documents differ, that one is what is
 built.
 
-## 0. What this is based on
+<a id="0-what-this-is-based-on"></a>
+
+## 0. Source baseline
 
 - `cashucard/javacard`, applet 0.4, commit `c1f4580`, MIT. Its `spec/APDU.md`,
   `spec/NUT-XX.md` (Profile B and B+), `docs/DECISIONS.md` and the J3R180
@@ -48,7 +52,9 @@ built.
 Not goals of the first version: paying a receiver that has no connection,
 cards from other issuers, a card without a PIN, units other than sats.
 
-## 2. What the person sees
+<a id="2-what-the-person-sees"></a>
+
+## 2. User flow
 
 ### 2.1 Paying by card (receiver's phone, receive invoice screen)
 
@@ -150,7 +156,9 @@ CHANGE LIMIT.
    after its date, the money comes back with no card (see 6). Built, and on
    no screen while cards are cash.
 
-## 3. Who is trusted with what
+<a id="3-who-is-trusted-with-what"></a>
+
+## 3. Trust boundaries
 
 | Party | Holds | Can do wrong |
 |---|---|---|
@@ -173,16 +181,18 @@ block's worth of it. So a window that only a newer block can end is a bound it
 cannot walk round (5.7). Up to software 1.14 the time was signed by a key built
 into the app, which anyone could copy, and that last sentence was not true.
 
-## 4. What the review found, and what the fork does
+<a id="4-what-the-review-found-and-what-the-fork-does"></a>
+
+## 4. Review findings and fork changes
 
 | # | Found | In upstream 0.4 | The fork |
 |---|---|---|---|
 | 1 | A blocked PIN took the PIN gate away | fixed (a blocked PIN counts as set) | keep; add a test that every gated command refuses in every PIN state |
-| 2 | `SPEND_PROOF` signs 32 bytes the reader supplies, not the stored piece's own message | still so | the card works the message out itself from the slot; the reader supplies nothing (5.2) |
+| 2 | `SPEND_PROOF` lets the reader choose the signed 32-byte message independently of the stored piece | still so | the card works the message out itself from the slot; the reader supplies nothing (5.2) |
 | 3 | `SIGN_ARBITRARY` signs anything and burns no slot, so SPENT enforces nothing | still there, behind the PIN | removed. Proving the card is the card gets its own command, whose signature cannot be a spend (5.2) |
 | 4 | No DLEQ on the card, so a piece cannot be checked without the mint | still so | not needed while the receiver is online. From software 1.20 the card keeps the mint's proof for each piece, for a phone to read and check; the card checks nothing (5.9) |
-| 5 | Factory GlobalPlatform keys left on the card | provisioning, not the applet | the provisioning steps set new keys, and say so (5.4) |
-| 6 | The terminal showed paid when the swap had failed, and booked another's spend as settled | their terminal, not used here | Foxy's own rule: paid only when the mint has given this phone its pieces (8) |
+| 5 | Factory GlobalPlatform keys left on the card | provisioning responsibility | the provisioning steps set new keys, and say so (5.4) |
+| 6 | The terminal showed paid when the swap had failed, and booked another's spend as settled | upstream terminal behavior | Foxy's own rule: paid only when the mint has given this phone its pieces (8) |
 | 7 | Over-payment is the merchant's income; change is not returned in the payment | by design upstream | change goes back to the card in the same tap, or waits for it (8.2) |
 | 8 | A terminal with the PIN can spend every slot | by design upstream | a daily limit in the card's permanent memory, counted against a day the card keeps from the Bitcoin block headers it is shown: every spend adds the whole piece signed to today's total, a piece that would take the day past the limit is refused, and only the owner's proof sets or removes the limit (5.3, 5.7). It bounds a terminal to one day's limit per visit, honest or not: a terminal cannot start another day without a header dated later, which has to be a real block or a forgery that costs work (5.7). Two earlier tries failed: a limit on one PIN entry was walked round by a terminal that had the PIN, and an allowance that only went down and only the owner's proof raised held against a terminal but stopped a card whose owner's phone was not at hand |
 | 9 | A blocked or lost card strands its balance | acknowledged; no unblock | a blocked card is unblocked by its owner's phone (`CHANGE_PIN`, 5.6); for a lost card, a refund path the funding phone holds (6) |
@@ -194,7 +204,9 @@ into the app, which anyone could copy, and that last sentence was not true.
 
 ## 5. The card
 
-### 5.1 What it stores
+<a id="51-what-it-stores"></a>
+
+### 5.1 Stored state
 
 A card record. `SET_CARD` writes the unit, the refund key, the mint and the
 flag that it has run, and never the limit, the day, `now` or the block fields.
@@ -219,7 +231,7 @@ header.
 | mint | 1 + up to 77 | the mint's address, as text |
 | design | 3 | the card's face: a code of three characters, capital letters and digits, naming a design in docs/CARD-DESIGNS.md; zeros for none. Written by `SET_CARD` when given, cleared by one that is not (1.10) |
 
-The mint is at most 77 characters, not 96 as the earlier draft had it (80
+The mint is at most 77 characters (the earlier draft allowed 96; 80
 before the design). The reason is one command: `SET_CARD` with the owner's
 proof on a card that has an owner carries a proof of up to 72 bytes, 100 bytes
 of record, the mint and the design, and a short APDU holds 255 data bytes in
@@ -391,7 +403,9 @@ unassigned:
 header could carry: a size of 0 or of more than 32, or a mantissa with its top
 bit set.
 
-### 5.3 Rules the applet must keep
+<a id="53-rules-the-applet-must-keep"></a>
+
+### 5.3 Applet invariants
 
 1. **No signature without a slot burned.** The only signing paths are SPEND
    and AUTH. SPEND marks the slot spent before the signature leaves, as now.
@@ -484,7 +498,9 @@ bit set.
   issuer's hands set up (PIN, record, then owner: 5.6), so that nobody has to
   think about it.
 
-### 5.5 How it is tested
+<a id="55-how-it-is-tested"></a>
+
+### 5.5 Verification
 
 - jCardSim: every command in every PIN state and, where it matters, in each
   owner state (none, one); SPEND's message against the secret Foxy builds for
@@ -608,7 +624,7 @@ given in this tap (`6982`: a locked card resets for the owner's proof and the
 PIN, and a locked card whose PIN is blocked cannot be reset); anything
 unspent on the card (`6A8D`, as `SET_CARD` refuses a record on a card that is
 not empty). A blocked PIN on a card that is not locked is no bar: the owner is
-resetting, not unblocking.
+authorizing a reset.
 
 The card then reads as a card out of its packet: no PIN (`GET_INFO` PIN state
 0, three tries), no owner, not locked, no record, no limits, no allowance, no
@@ -682,17 +698,17 @@ not 0: if `now` is a day (86,400 seconds) or more past the window's start, the
 window is new and begins at `now`; a piece that would take what is spent today
 past the limit is refused (`6A8F`) with nothing signed, burned or written;
 otherwise the window start (if new), what is spent today and the slot's status
-change in one transaction, and the signing comes after. Nothing else begins a
-window: not `VERIFY_PIN`, not a new SELECT, not a reset, not a load. A limit of 0
-skips all of it and needs no clock. `now` only ever moves forward, and nothing
-sets it back.
+change in one transaction, and the signing comes after. `VERIFY_PIN`, a new
+SELECT, a reset and a load preserve the current window. A limit of 0 skips all
+of it and needs no clock. `now` only ever moves forward, and nothing sets it
+back.
 
 A card that has been shown no header (`now` is 0) spends its first day on trust.
 It may be loaded and given a limit; its window has no start and cannot end, so
 what leaves the card counts up to the limit and is then refused (`6A8F`) until a
 header arrives; and the first header taken begins the window at its own time.
 
-**It counts what leaves the card, not the price paid.** From software 1.12 a
+**Counted value.** The limit charges the value leaving the card. From software 1.12 a
 payment's change is the card's own (`SPEND_ALL_CHANGE`): outputs the card
 builds and locks to its own key, which no terminal can take, so the day is
 charged the pieces less that change. Change a terminal writes back by other
@@ -735,10 +751,10 @@ nothing (there, 5.3).
 
 **What it costs.**
 - A piece worth more than what is left of today cannot be spent today, whatever
-  the payment: with one piece of 1,000 sats and 500 left, not even 10 sats can be
-  paid until the day turns or the owner's phone changes the limit.
+  the payment: with one piece of 1,000 sats and 500 left, a 10-sat payment must
+  wait until the day turns or the owner's phone changes the limit.
 - A payment can be refused for the limit while the card holds enough: the till
-  says OVER THE CARD'S DAILY LIMIT, not NOT ENOUGH ON THE CARD.
+  uses the OVER THE CARD'S DAILY LIMIT result.
 - Every spend writes one more thing to permanent memory.
 - The owner's phone taking money off the card lifts the limit and puts it back in
   the same tap. Putting it back starts a new window with nothing spent, so a
@@ -1002,7 +1018,9 @@ answer is `<place> 01`. To read: `B0 1A <place> FF 00` for one place, or the two
 and P2. A phone's gate has to carry instruction `1A`. `spec/vectors/transcript.json` has both
 commands as commands and answers.
 
-## 6. A lost or blocked card is not lost money
+<a id="6-a-lost-or-blocked-card-is-not-lost-money"></a>
+
+## 6. Lost-card and blocked-PIN recovery proposal
 
 Upstream's position is that a card is cash: lose it and it is gone, and a
 blocked PIN strands it as well. Their own notes call a refund path "the right
@@ -1060,8 +1078,8 @@ A card can be made with no refund key, and is then cash, as upstream's.
   commands, with no NFC in it, so it is unit tested.
 - The bridge gives the page three calls: read (no PIN), spend (PIN, slots),
   write (pieces, card record; the PIN, unless the owner's phone is adding
-  funds). The PIN goes to the card and nowhere else: not kept, not logged,
-  wiped when the session ends.
+  funds). The PIN is sent to the card and wiped when the session ends. Storage and
+  logs exclude it.
 - The native side holds the owner key (5.6). The page never sees the twelve
   words, the seed or the owner's private key; native offers it exactly two
   things:
@@ -1130,7 +1148,9 @@ is a second swap, an ordinary locked send to the card's key, cut by what it
 costs and settled on the payment's entry as any change here is. One swap for
 both would save a sat or two at a mint that charges; it is not built.
 
-### 8.2 What is this phone's and what is not
+<a id="82-what-is-this-phones-and-what-is-not"></a>
+
+### 8.2 Merchant funds and card change
 
 - The amount is this phone's when the swap answers.
 - Change is never this phone's. It is locked to the card and kept in a store
@@ -1213,7 +1233,9 @@ holds money, and a card that holds money is told to withdraw it first.
   (`CARD-DESIGNS.md`; FL1 today). The card does not yet carry its code.
 - Render snapshots for each state.
 
-## 10. What it does not protect against
+<a id="10-what-it-does-not-protect-against"></a>
+
+## 10. Residual risks
 
 A card is cash. It holds what is put on it. The daily limit bounds a terminal
 that has been handed the PIN, honest or built to cheat, to one day's limit per
@@ -1267,7 +1289,7 @@ visit, where the owner has set one (5.7).
   closes that. The owner can switch the tag off; a terminal that has the PIN cannot
   switch it either way.
 - A holder with no phone has no balance they can read that a terminal did not
-  draw. That is a screen, not a clock.
+  draw. That screen displays the stored values; clock validation follows the header rules.
 - A pretend card can collect a PIN typed for it. AUTH lets a holder's own phone
   know its card; a receiver has no way to know a stranger's card is real, and
   loses nothing if it is not.
@@ -1275,7 +1297,9 @@ visit, where the owner has set one (5.7).
   the owner crosses the air.
 - Whoever holds the refund key's words can take a card's money after its date.
 
-## 11. Order of work, and how much
+<a id="11-order-of-work-and-how-much"></a>
+
+## 11. Implementation sequence and estimates
 
 | Phase | What | Rough effort |
 |---|---|---|
@@ -1292,7 +1316,9 @@ Phase 1 is about three weeks of the way this project is worked now. The
 applet and the wallet can be written and tested without a card; phases 1b and
 1e cannot be finished without the membership and the hardware.
 
-## 12. For you to decide
+<a id="12-for-you-to-decide"></a>
+
+## 12. Open decisions
 
 1. **Recovery.** A refund key and a year's date on every piece (recommended),
    or cash-like cards with nothing behind them, or the choice per card.

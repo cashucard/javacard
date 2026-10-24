@@ -1,4 +1,6 @@
-# APDU Command Reference — Cashu card protocol 2.1
+<a id="apdu-command-reference--cashu-card-protocol-21"></a>
+
+# APDU Command Reference: Cashu card protocol 2.1
 
 The wire of the shared Cashu card protocol, version 2.1: the applet in this
 repository (`applet/src/main/java/me/flashapp/cashu/CashuApplet.java`), which is
@@ -24,7 +26,7 @@ them). `cardctl.py` (`tools/cardctl`) drives the commands it names below, and
 other on every push. The design and the reasons for it are in
 [`docs/FOXY-CARD-SPEC.md`](../docs/FOXY-CARD-SPEC.md) section 5 and
 [`docs/FOXY-CARD-DAILY-LIMIT.md`](../docs/FOXY-CARD-DAILY-LIMIT.md); where they
-and this file differ, this file is the 2.0 wire.
+and this file differ, this file is the protocol 2.1 command reference.
 
 ---
 
@@ -154,7 +156,9 @@ empty card is open to the first phone that sets it up.
 
 ---
 
-## Category 0x0x / 0x1x — Read (no authentication required)
+<a id="category-0x0x--0x1x--read-no-authentication-required"></a>
+
+## Category 0x0x / 0x1x: Read (no authentication required)
 
 ### GET_INFO (0x01)
 
@@ -164,7 +168,7 @@ empty card is open to the first phone that sets it up.
 | INS | `01` |
 | P1 | `00`, `01` or `02` |
 | P2 | `00` |
-| Lc | — |
+| Lc | absent |
 | Le | `00` |
 
 **Response:** 30 bytes with P1 = `00` (any P1 but 1 and 2), 42 with P1 = `01`, 43 with P1 = `02`.
@@ -252,12 +256,12 @@ has it.
 
 | Offset | Size | Field |
 |---|---|---|
-| 0 | 1 | Status — `00` empty, `01` unspent, `02` spent |
-| 1 | 8 | Keyset ID — the NUT-02 id's first 8 bytes, raw (not ASCII) |
-| 9 | 4 | Amount — uint32, big-endian |
-| 13 | 32 | Nonce — the NUT-10 P2PK secret's nonce, raw (the card rebuilds the secret from it) |
-| 45 | 33 | C — the mint's unblinded signature, a compressed point |
-| 78 | 4 | Date — the piece's locktime, seconds; 0 for none |
+| 0 | 1 | Status: `00` empty, `01` unspent, `02` spent |
+| 1 | 8 | Keyset ID: the NUT-02 id's first 8 bytes, raw (not ASCII) |
+| 9 | 4 | Amount: uint32, big-endian |
+| 13 | 32 | Nonce: the NUT-10 P2PK secret's nonce, raw (the card rebuilds the secret from it) |
+| 45 | 33 | C: the mint's unblinded signature, a compressed point |
+| 78 | 4 | Date: the piece's locktime, seconds; 0 for none |
 
 `6A83` for a slot out of range. A spent slot whose `CLEAR_SPENT` was cut short
 still answers, with some fields zeroed: its bytes are not a proof.
@@ -397,7 +401,9 @@ range. The card checks nothing: the phone checks the proof with the mint's keys.
 
 ---
 
-## Category 0x2x — Spend (one signature for a payment: NUT-11 SIG_ALL)
+<a id="category-0x2x--spend-one-signature-for-a-payment-nut-11-sig_all"></a>
+
+## Category 0x2x: Spend (one signature for a payment: NUT-11 SIG_ALL)
 
 A payment is `SPEND_ALL_BEGIN`, the swap's outputs (`SPEND_ALL_OUTPUTS`), the
 card's own change (`SPEND_ALL_CHANGE`, any number up to the openings free), then
@@ -495,7 +501,9 @@ on the air. The PIN if one is set, unless that signature was given with no PIN.
 
 ---
 
-## Category 0x3x — Write
+<a id="category-0x3x--write"></a>
+
+## Category 0x3x: Write
 
 ### LOAD_PROOF (0x30)
 
@@ -635,7 +643,9 @@ A note for the receipts and the log of this tap; trusted for nothing.
 
 ---
 
-## Category 0x4x — Authentication
+<a id="category-0x4x--authentication"></a>
+
+## Category 0x4x: Authentication
 
 ### VERIFY_PIN (0x40)
 
@@ -735,7 +745,9 @@ locked.
 
 ---
 
-## Category 0x5x — Admin
+<a id="category-0x5x--admin"></a>
+
+## Category 0x5x: Admin
 
 ### LOCK_CARD (0x50)
 
@@ -869,7 +881,7 @@ arming, for anyone.
 | 6985 | Conditions not satisfied: already spent, no payment begun, allowance on a card with no PIN, already locked |
 | 6986 | Card locked |
 | 6A80 | Wrong data: not a point, a bad refund key, bits no header could carry, a budget outside 1–30 |
-| 6A82 | Not found (the card's runtime): no applet of this name — a 0.x or 1.x card |
+| 6A82 | Not found (the card's runtime): no applet of this name (an earlier 0.x or 1.x applet is one possible cause) |
 | 6A83 | Slot out of range |
 | 6A84 | No space: no slot, or no change opening, free |
 | 6A86 | Incorrect P1 or P2 |

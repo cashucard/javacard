@@ -1,5 +1,7 @@
 > This is upstream's own report of their applet on their hardware (cashucard/javacard), kept as received. It is not a report on the Foxy fork.
 
+> Separator punctuation was normalized; recorded commands, values, results and conclusions are unchanged.
+
 # Cashu JavaCard Physical Hardware Test Report
 
 - **Test date:** 2026-09-01 (UTC+08:00)
@@ -138,11 +140,11 @@ Command:
 Successful checks:
 
 ```text
-PASS  SELECT applet — version 0.1
-PASS  GET_INFO — v0.1, 32 slots, PIN unset
-PASS  Schnorr capability advertised — caps=0x07
-PASS  GET_BALANCE — 0
-PASS  GET_SLOT_STATUS — 32 status bytes
+PASS  SELECT applet: version 0.1
+PASS  GET_INFO: v0.1, 32 slots, PIN unset
+PASS  Schnorr capability advertised: caps=0x07
+PASS  GET_BALANCE: 0
+PASS  GET_SLOT_STATUS: 32 status bytes
 ```
 
 SELECT APDU:
@@ -179,7 +181,7 @@ Request and response:
 The response is a 65-byte uncompressed secp256k1 public key with a `0x04` prefix. `cardctl selftest` reports:
 
 ```text
-FAIL  GET_PUBKEY well-formed — 042f3253009b4481805a… (65 bytes)
+FAIL  GET_PUBKEY well-formed: 042f3253009b4481805a… (65 bytes)
 ```
 
 It then terminates while attempting BIP-340 verification:
@@ -212,7 +214,7 @@ Therefore:
 
 ```text
 applet version   : 0.1
-slots            : 32 total — 0 unspent, 0 spent, 32 empty
+slots            : 32 total: 0 unspent, 0 spent, 32 empty
 capabilities     : 0x07 (secp256k1 native=True, schnorr=True)
 PIN              : unset
 balance          : 0
