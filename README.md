@@ -5,6 +5,13 @@
 > guide](https://github.com/cashucard/cashucard#readme) for current behavior and
 > deployment guidance.
 
+> **Experimental.** Cashu Card is an experimental open source project. It is
+> built on NUT-CCP, a draft NUT proposal that has had little outside review, and
+> its testing so far is limited to dated reports in
+> [cashucard/cashucard](https://github.com/cashucard/cashucard). Keep only small
+> amounts on a card. Questions go to
+> [Discussions](https://github.com/cashucard/cashucard/discussions).
+
 A JavaCard applet implementing the [Cashu](https://cashu.space) ecash protocol
 for NFC bearer payments. A physical card holds Bitcoin-denominated ecash on its
 chip. Its holder pays by tapping the card; a merchant can accept payment offline
