@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Ask a question
+    url: https://github.com/cashucard/cashucard/discussions
+    about: Questions about the protocol, the applet, the client and the tools all go to Discussions in cashucard/cashucard.
+  - name: Report a vulnerability
+    url: https://github.com/cashucard/cashucard/security/advisories/new
+    about: Report security issues privately.
