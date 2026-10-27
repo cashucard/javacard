@@ -1,15 +1,17 @@
 # Security Policy
 
-This is the Foxy fork of `cashucard/javacard`: a JavaCard applet that holds
-ecash on a card, and the documents that go with it. A bug here can lose the
-money on a card, so reports are welcome and taken seriously.
+This repository holds the Cashu Card reference JavaCard applet: the code on the
+card that holds ecash and signs payments, and the documents that go with it. A
+bug here can lose the money on a card, so reports are welcome and taken
+seriously.
 
 ## Reporting a Vulnerability
 
 Report it privately through this repository's security advisories:
-<https://github.com/getfoxy/card/security/advisories/new> (the **Security** tab,
+<https://github.com/cashucard/javacard/security/advisories/new> (the **Security** tab,
 then **Report a vulnerability**). That makes a private advisory that only the
-maintainers can see.
+maintainers can see. You can also email
+[security@cashucard.org](mailto:security@cashucard.org).
 
 Please do **not** open a public GitHub issue, pull request or discussion for a
 vulnerability.
@@ -28,11 +30,10 @@ Include as much of the following as you can:
 
 ## Scope
 
-This policy applies to this repository: the applet in `applet/`, its tests, and
-the documents. The Foxy app that talks to the card has its own policy in
+This policy covers this repository: the applet in `applet/`, its tests, the
+host tools and the documents. The spec here is mirrored from
+[cashucard/cashucard](https://github.com/cashucard/cashucard), and the protocol
+core is in [cashucard/nut](https://github.com/cashucard/nut); a private report
+here reaches the same maintainers. Wallet and till apps that talk to the card
+have their own policies, such as the Foxy app's in
 [getfoxy/iOS](https://github.com/getfoxy/iOS) (`docs/SECURITY.md`).
-
-Code that this fork took from upstream and did not change, and the host tools
-in `tools/cardctl` and `tools/e2e-*` that describe upstream's wire, are
-upstream's. For a problem that is in upstream's applet and not in this fork,
-follow the policy of [cashucard/javacard](https://github.com/cashucard/javacard).
