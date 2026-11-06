@@ -1,12 +1,16 @@
+<a id="apdu-command-reference--cashu-card-protocol-22"></a>
 <a id="apdu-command-reference--cashu-card-protocol-21"></a>
 
-# APDU Command Reference: Cashu card protocol 2.1
+# APDU Command Reference: Cashu card protocol 2.2
 
-The wire of the shared Cashu card protocol, version 2.1: the applet in this
+The wire of the shared Cashu card protocol, version 2.2: the applet in this
 repository (`applet/src/main/java/me/flashapp/cashu/CashuApplet.java`), which is
 the Foxy wallet project's software 1.20 with a neutral identity and the fixes in
 [`docs/DECISIONS.md`](../docs/DECISIONS.md) D18 to D26. 2.1 has 2.0's commands and
-bytes; what moves the day and the rollover budget is D26's (below). Version 2.x is not
+bytes; what moves the day and the rollover budget is D26's (below). 2.2 adds one
+public read, `GET_OUTBOX` (`1B`, [D175](../docs/DECISIONS.md#d175)): the card keeps
+a record of its last SIG_ALL payment, the assisted-settlement packet, and serves
+it; nothing else moves. Version 2.x is not
 compatible with the 0.x applet that this file used to describe, nor with Foxy's
 1.x: it has an AID of its own, so that neither can be mistaken for it.
 
@@ -26,7 +30,7 @@ them). `cardctl.py` (`tools/cardctl`) drives the commands it names below, and
 other on every push. The design and the reasons for it are in
 [`docs/FOXY-CARD-SPEC.md`](../docs/FOXY-CARD-SPEC.md) section 5 and
 [`docs/FOXY-CARD-DAILY-LIMIT.md`](../docs/FOXY-CARD-DAILY-LIMIT.md); where they
-and this file differ, this file is the protocol 2.1 command reference.
+and this file differ, this file is the protocol 2.2 command reference.
 
 ---
 
@@ -42,9 +46,9 @@ and this file differ, this file is the protocol 2.1 command reference.
 | Data | `F0 43 41 53 48 55 43 41 52 44 01` (the card's applet: the package AID, "CASHUCARD" after the proprietary RID byte `F0`, and `01`) |
 | Le | `00` |
 
-**Response:** 2 bytes, the applet version: `02 01`. A reader takes any `02 xx`
+**Response:** 2 bytes, the applet version: `02 02`. A reader takes any `02 xx`
 as the shared protocol; `02 00` is the v2.0.0 release, whose rollover rules D26
-replaced.
+replaced, and `02 01` is 2.1, which has no `GET_OUTBOX` (it answers `6D00`).
 
 A reader selects the applet's whole AID ([D25](../docs/DECISIONS.md#d25)). The
 package AID `F0 43 41 53 48 55 43 41 52 44` begins two instance AIDs, the
@@ -81,6 +85,7 @@ app spends nothing from such a card.
 | `18` | GET_LOG | the PIN, or the owner's grant | [GET_LOG](#get_log-0x18) |
 | `19` | GET_CHANGE | nothing | [GET_CHANGE](#get_change-0x19) |
 | `1A` | GET_DLEQ | nothing | [GET_DLEQ](#get_dleq-0x1a) |
+| `1B` | GET_OUTBOX | nothing | [GET_OUTBOX](#get_outbox-0x1b) |
 | `22` | SPEND_ALL_BEGIN | nothing | [SPEND_ALL_BEGIN](#spend_all_begin-0x22) |
 | `23` | SPEND_ALL_OUTPUTS | a payment begun | [SPEND_ALL_OUTPUTS](#spend_all_outputs-0x23) |
 | `24` | SPEND_ALL_SIGN | the PIN, or the no-PIN allowance, or no PIN set | [SPEND_ALL_SIGN](#spend_all_sign-0x24) |
@@ -399,6 +404,97 @@ the mint's NUT-12 proof kept with an unspent piece, or `00` (empty, spent, loade
 without one, or no room for proofs). At most 194 bytes. `6A83` for a slot out of
 range. The card checks nothing: the phone checks the proof with the mint's keys.
 
+### GET_OUTBOX (0x1B)
+
+The record of the card's last SIG_ALL payment, as an assisted-settlement packet
+(2.2, [D175](../docs/DECISIONS.md#d175)): everything a relay needs to submit that
+payment's swap to the mint, and to restore its outputs, with nothing secret in
+it. The packet format and the relay are the draft in
+[cashucard/nut#6](https://github.com/cashucard/nut/pull/6); this section is the
+card's side of it. Public: no PIN and no grant, since the packet says only what
+the till that took the payment already holds, and nothing in it can spend.
+
+| Field | Value |
+|---|---|
+| CLA | `B0` |
+| INS | `1B` |
+| P1 | `00` the scope; `01` a page |
+| P2 | `00` |
+| Lc | P1 = `00`: none. P1 = `01`: `03` |
+| Data | P1 = `01`: the offset (2, big-endian) and a count (1, `01`–`FF`) |
+| Le | `00` |
+
+**Response, P1 = `00`:** the scope, 45 bytes: the index (1, `00`), the payment
+id (8), the generation (4) and the SHA-256 of the packet's body (32). A relay
+reads it before and after the pages and keeps the packet only if the two agree.
+
+**Response, P1 = `01`:** `min(count, total - offset)` bytes of the packet (body
+‖ descriptor) from the offset, where total is the body's length and 64. A relay
+asks at offsets 0, 255, 510, … with a count of 255, and stops at the first page
+shorter than 255 (or at `6A83`, when the packet is a whole number of pages).
+
+**The packet**, in this order (all numbers big-endian):
+
+| Bytes | Field | From |
+|---|---|---|
+| 7 | `CCP-AS` and `01`, the format | |
+| 33 | the card key, compressed | `GET_PUBKEY` |
+| 32 | the installation | 32 random bytes drawn when the applet is installed; kept through `RESET_CARD` |
+| 8 | the payment id | 4 zero bytes and the receipt count (`GET_LOG` P1 = `01`), which this payment stepped |
+| 1 | the index | `00` |
+| 4 | the generation | 1 at install, one more at each `RESET_CARD` |
+| 1 | the profile | `01` |
+| 2 | the mint's length | the card record (`SET_CARD`) |
+| n | the mint | the card record: `https://`, at most 77 bytes |
+| 1 | the unit | `00`, sat |
+| 1 | the inputs | how many, 1 to 32 |
+| 83 each | an input | the place (1), the generation (4), the amount (4), `08`, the keyset (8), the nonce (32), C (33) |
+| 1 | the outputs | how many, 1 to 16 |
+| 46 each | an output | the amount (4), `08`, the keyset (8), B_ (33) |
+| 64 | the witness | the payment's signature, as `SPEND_ALL_SIGN` gave it (and `SPEND_ALL_AGAIN` gives it again) |
+| 64 | the descriptor | the card key's BIP-340 signature over SHA-256(tag ‖ tag ‖ body), tag = SHA-256(`CashuCard/assisted-settlement/v1`) |
+
+The body is everything before the descriptor. The inputs are in the order
+`SPEND_ALL_BEGIN` named them; the outputs are the till's (`SPEND_ALL_OUTPUTS`)
+and then the card's change (`SPEND_ALL_CHANGE`), in the order the message hashed
+them. Each input's secret is the undated card proof secret (NUT-CCP), rebuilt from
+its nonce and the card key; the witness verifies over the NUT-11 SIG_ALL message
+of those inputs and outputs. In 2.2 every output carries the first input's 8-byte
+keyset, as the card's change always has, because `SPEND_ALL_OUTPUTS` carries no
+keyset: a till that blinds an output for another keyset gets a packet the mint
+refuses. Each input's generation is the card's. The payment id is unique only
+together with the generation, since `RESET_CARD` sets the receipt count back to 0.
+
+**When.** The record is written by `SPEND_ALL_SIGN`, after the payment's receipt,
+for the payment that was signed. The old record is let go first, so that a
+payment that leaves no record leaves none of the one before it either. A payment
+refused or given up (any other command between its steps, `GET_OUTBOX` included)
+writes nothing, and the record of the last payment stays as it was. No record is
+left (`6A88`) for a payment of more than 32 pieces or more than 16 outputs, for
+one with no outputs or an output of 0, for dated pieces (the packet has no field
+for a locktime or a refund key), for a mint that does not begin with `https://`,
+and once the receipt count or the generation has reached `FFFFFFFF`. The payment
+is made and answered in all of these as it would be without the record.
+
+**Tears.** The record's status goes to 0 before the body is written and to 1, with
+the body's length, in one transaction after it: a card pulled away in between has
+no record, and never a mix of two. The descriptor is made at the first read of
+either form, kept, and marked in a transaction of one byte; a read after a tear
+signs it again. A tear between the receipt and the record leaves the payment made
+with no record.
+
+**Capacity and timing.** 3,688 bytes at the most (a 77-byte mint, 32 inputs and
+16 outputs), in 15 pages; 494 for two inputs and two outputs with the mint
+`https://mint.test`. The card reserves 4,321 bytes of persistent memory for it at
+install: the record (3,692), the outputs of the payment in hand (593), the
+installation (32) and the generation (4). `SPEND_ALL_SIGN` writes about 500 bytes
+more for a payment of two pieces and two outputs, and 3.6 KB at the most; the
+first read signs once (about as long as `AUTH`), and every later read only copies.
+
+`6A86` for a P1 other than `00` or `01`, or a P2 other than `00`; `6A88` with no
+record; `6700` for data of any length but 3 with P1 = `01`, or a count of 0;
+`6A83` for an offset at or past the packet's end. P1 = `00` receives nothing.
+
 ---
 
 <a id="category-0x2x--spend-one-signature-for-a-payment-nut-11-sig_all"></a>
@@ -556,6 +652,20 @@ checks ([`CARD-FILE.md`](CARD-FILE.md#slot)). The slot checks catch a zeroed
 amount and a `C` that is no longer a point. A tear that zeroed only keyset or
 nonce bytes, or part of `C` whose x still lands on the curve, passes them, and
 `dump` writes that slot as spent. The PIN if one is set, or either grant.
+
+**Reader settlement precondition:** this command clears every retained spent
+slot. Before sending it, the reader MUST reconstruct every retained spent proof
+and obtain a NUT-07 `SPENT` result for each one from its mint. Card-local spent
+status records consumption on the card; a merchant may still hold an offline
+payment awaiting settlement. `UNSPENT`, `PENDING`, unavailable state, incomplete
+coverage or an unreconstructable proof blocks clearing. An empty card balance
+or local settlement queue does not satisfy this precondition.
+
+Bind the checked snapshot to the same authenticated card and revalidate it
+before clearing. Preserve the verified scope across an interrupted clear: a
+partly zeroed slot alone supplies no settlement evidence. Merchant output and
+change-recovery records have their own retention requirements. See the shared
+[CCP reader contract](https://github.com/cashucard/nut/blob/main/CCP.md).
 
 ### SET_CARD (0x32)
 
@@ -882,10 +992,10 @@ arming, for anyone.
 | 6986 | Card locked |
 | 6A80 | Wrong data: not a point, a bad refund key, bits no header could carry, a budget outside 1–30 |
 | 6A82 | Not found (the card's runtime): no applet of this name (an earlier 0.x or 1.x applet is one possible cause) |
-| 6A83 | Slot out of range |
+| 6A83 | Slot out of range, or an offset at or past the packet's end (`GET_OUTBOX`) |
 | 6A84 | No space: no slot, or no change opening, free |
 | 6A86 | Incorrect P1 or P2 |
-| 6A88 | Slot empty, or no signature to give again |
+| 6A88 | Slot empty, or no signature to give again, or no payment record (`GET_OUTBOX`) |
 | 6A8C | No card record |
 | 6A8D | Card in use: something unspent where only an empty card may be changed |
 | 6A8E | A dated piece on a card with no refund key |
