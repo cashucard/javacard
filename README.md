@@ -1,5 +1,12 @@
 # cashu-javacard
 
+> **ARCHIVED on 2026-11-06.** This repository is read-only. The Cashu Card applet,
+> its command reference (`spec/`), tools, provisioning app and every later
+> decision live in [cashucard/cashucard](https://github.com/cashucard/cashucard),
+> which began as a copy of this repository with its whole history. The `spec/`
+> here stops at protocol 2.1; 2.2 and later are documented only there. Releases
+> and history here stay as they were for reference.
+
 > **Historical implementation snapshot:** the hardware and integration status
 > in this repository reflects an earlier milestone. See the [current Cashu Card
 > guide](https://github.com/cashucard/cashucard#readme) for current behavior and
